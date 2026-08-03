@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Jobs - Pathfinder Job Copilot{% endblock %}
+{% block content %}
+  <h1>Job tracker</h1>
+  <p><a href="{% url 'jobsearch:criteria_list' %}">Manage search criteria</a></p>
+
+  <form method="get" class="stacked">
+    <label>
+      Filter by status:
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+
+  {% for job in jobs %}
+    {% include "jobsearch/_job_card.html" with job=job %}
+  {% empty %}
+    <p>No jobs yet. <a href="{% url 'jobsearch:criteria_list' %}">Create a criteria profile</a> and run a search.</p>
+  {% endfor %}
+{% endblock %}

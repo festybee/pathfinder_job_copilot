@@ -1,0 +1,46 @@
+<div class="card" id="job-{{ job.pk }}">
+  <h3>
+    {% if job.url %}<a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>{% else %}{{ job.title }}{% endif %}
+  </h3>
+  <p>{{ job.company }} &middot; {{ job.location }} &middot; {{ job.get_source_display }}</p>
+  {% if job.compensation_raw %}<p>{{ job.compensation_raw }}</p>{% endif %}
+
+  {% if job.threshold_pass is not None %}
+    {% if job.threshold_pass %}
+      <span class="pill pass">clears threshold</span>
+    {% else %}
+      <span class="pill fail">below threshold</span>
+    {% endif %}
+  {% endif %}
+
+  <form method="post"
+        action="{% url 'jobsearch:job_update_status' job.pk %}"
+        hx-post="{% url 'jobsearch:job_update_status' job.pk %}"
+        hx-target="#job-{{ job.pk }}"
+        hx-swap="outerHTML"
+        hx-trigger="change">
+    {% csrf_token %}
+    <label>
+      Status:
+      <select name="status">
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if job.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Sponsor:
+      <select name="sponsor_status">
+        {% for value, label in sponsor_choices %}
+          <option value="{{ value }}" {% if job.sponsor_status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+
+  <p>
+    <a href="{% url 'aiassist:tailor_cv' job.pk %}">Tailor CV</a> &middot;
+    <a href="{% url 'aiassist:cover_letter' job.pk %}">Cover letter</a> &middot;
+    <a href="{% url 'aiassist:qa' job.pk %}">Q&amp;A</a>
+  </p>
+</div>

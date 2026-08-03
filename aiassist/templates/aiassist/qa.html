@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Q&A - {{ job.title }}{% endblock %}
+{% block content %}
+  <h1>Application Q&amp;A: {{ job.title }} @ {{ job.company }}</h1>
+  <p><a href="{% url 'jobsearch:job_list' %}">&larr; back to jobs</a></p>
+  <p>Paste an application form question below - grounded in whichever portfolio documents you tick.</p>
+
+  <form method="post" class="stacked card">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="primary">Get an answer</button>
+  </form>
+
+  {% for draft in drafts %}
+    <div class="card">
+      <p><strong>Q:</strong> {{ draft.prompt_question }}</p>
+      <p><small>{{ draft.created_at }}</small></p>
+      <pre style="white-space: pre-wrap; font-family: inherit;">{{ draft.content }}</pre>
+    </div>
+  {% empty %}
+    <p>No answers yet.</p>
+  {% endfor %}
+{% endblock %}

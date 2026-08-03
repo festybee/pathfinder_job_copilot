@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Criteria - Pathfinder Job Copilot{% endblock %}
+{% block content %}
+  <h1>Search criteria</h1>
+  <p>Nothing here is fixed - add as many keyword/location/salary-mode combinations as you want.</p>
+
+  {% for profile in profiles %}
+    <div class="card">
+      <h3><a href="{% url 'jobsearch:criteria_detail' profile.pk %}">{{ profile.name }}</a></h3>
+      <p>{{ profile.keywords }} &middot; {{ profile.location|default:"any location" }} &middot; {{ profile.country_code }}</p>
+      <span class="pill">{{ profile.get_salary_mode_display }}</span>
+      <p>
+        <a href="{% url 'jobsearch:criteria_edit' profile.pk %}">Edit</a> &middot;
+        <a href="{% url 'jobsearch:criteria_delete' profile.pk %}">Delete</a>
+      </p>
+    </div>
+  {% empty %}
+    <p>No criteria profiles yet - create one below.</p>
+  {% endfor %}
+
+  <form method="post" class="stacked card">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="primary">Create criteria profile</button>
+  </form>
+{% endblock %}
