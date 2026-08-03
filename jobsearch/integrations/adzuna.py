@@ -31,46 +31,60 @@ class AdzunaIntegration:
                 "to your .env."
             )
 
+        # Run one search per keyword phrase and merge results, rather than
+        # joining all keywords into a single query - Adzuna's "what" param
+        # requires every word in the query to be present, so "risk
+        # assessment compliance enforcement" as one string demands all of
+        # those words appear together and matches almost nothing.
         url = _BASE_URL.format(country=country_code.lower())
-        params = {
-            "app_id": self.app_id,
-            "app_key": self.app_key,
-            "what": " ".join(keywords),
-            "results_per_page": 50,
-            "content-type": "application/json",
-        }
-        if location and location.lower() != "remote":
-            params["where"] = location
-        if job_type == "fulltime":
-            params["full_time"] = 1
-        elif job_type == "parttime":
-            params["part_time"] = 1
-        elif job_type == "contract":
-            params["contract"] = 1
+        jobs: list[ExternalJob] = []
+        seen_ids: set[str] = set()
 
-        response = requests.get(url, params=params, timeout=15)
-        response.raise_for_status()
-        payload = response.json()
+        for keyword in keywords or [""]:
+            params = {
+                "app_id": self.app_id,
+                "app_key": self.app_key,
+                "what": keyword,
+                "results_per_page": 50,
+                "content-type": "application/json",
+            }
+            if location and location.lower() != "remote":
+                params["where"] = location
+            if job_type == "fulltime":
+                params["full_time"] = 1
+            elif job_type == "parttime":
+                params["part_time"] = 1
+            elif job_type == "contract":
+                params["contract"] = 1
 
-        jobs = []
-        for item in payload.get("results", []):
-            salary_min = item.get("salary_min")
-            salary_max = item.get("salary_max")
-            compensation = ""
-            if salary_min and salary_max:
-                compensation = f"{salary_min:.0f} - {salary_max:.0f}"
-            elif salary_min:
-                compensation = f"{salary_min:.0f}+"
+            response = requests.get(url, params=params, timeout=15)
+            response.raise_for_status()
+            payload = response.json()
 
-            jobs.append(
-                ExternalJob(
-                    external_id=str(item.get("id", "")),
-                    title=item.get("title", ""),
-                    company=(item.get("company") or {}).get("display_name", ""),
-                    location=(item.get("location") or {}).get("display_name", ""),
-                    description=item.get("description", ""),
-                    url=item.get("redirect_url", ""),
-                    compensation_raw=compensation,
+            for item in payload.get("results", []):
+                external_id = str(item.get("id", ""))
+                if external_id in seen_ids:
+                    continue
+                seen_ids.add(external_id)
+
+                salary_min = item.get("salary_min")
+                salary_max = item.get("salary_max")
+                compensation = ""
+                if salary_min and salary_max:
+                    compensation = f"{salary_min:.0f} - {salary_max:.0f}"
+                elif salary_min:
+                    compensation = f"{salary_min:.0f}+"
+
+                jobs.append(
+                    ExternalJob(
+                        external_id=external_id,
+                        title=item.get("title", ""),
+                        company=(item.get("company") or {}).get("display_name", ""),
+                        location=(item.get("location") or {}).get("display_name", ""),
+                        description=item.get("description", ""),
+                        url=item.get("redirect_url", ""),
+                        compensation_raw=compensation,
+                    )
                 )
-            )
+
         return jobs

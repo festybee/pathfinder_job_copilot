@@ -39,41 +39,53 @@ class ReedIntegration:
                 "https://www.reed.co.uk/developers and add it to your .env."
             )
 
-        params = {
-            "keywords": " ".join(keywords),
-            "resultsToTake": 50,
-        }
-        if location and location.lower() != "remote":
-            params["locationName"] = location
-        param_name = _JOB_TYPE_PARAM.get(job_type)
-        if param_name:
-            params[param_name] = "true"
+        # One search per keyword phrase, merged - see the comment in
+        # AdzunaIntegration.search() for why joining keywords into a
+        # single query breaks matching.
+        jobs: list[ExternalJob] = []
+        seen_ids: set[str] = set()
 
-        response = requests.get(
-            _SEARCH_URL, params=params, auth=(self.api_key, ""), timeout=15
-        )
-        response.raise_for_status()
-        payload = response.json()
+        for keyword in keywords or [""]:
+            params = {
+                "keywords": keyword,
+                "resultsToTake": 50,
+            }
+            if location and location.lower() != "remote":
+                params["locationName"] = location
+            param_name = _JOB_TYPE_PARAM.get(job_type)
+            if param_name:
+                params[param_name] = "true"
 
-        jobs = []
-        for item in payload.get("results", []):
-            salary_min = item.get("minimumSalary")
-            salary_max = item.get("maximumSalary")
-            compensation = ""
-            if salary_min and salary_max:
-                compensation = f"{salary_min:.0f} - {salary_max:.0f}"
-            elif salary_min:
-                compensation = f"{salary_min:.0f}+"
-
-            jobs.append(
-                ExternalJob(
-                    external_id=str(item.get("jobId", "")),
-                    title=item.get("jobTitle", ""),
-                    company=item.get("employerName", ""),
-                    location=item.get("locationName", ""),
-                    description=item.get("jobDescription", ""),
-                    url=item.get("jobUrl", ""),
-                    compensation_raw=compensation,
-                )
+            response = requests.get(
+                _SEARCH_URL, params=params, auth=(self.api_key, ""), timeout=15
             )
+            response.raise_for_status()
+            payload = response.json()
+
+            for item in payload.get("results", []):
+                external_id = str(item.get("jobId", ""))
+                if external_id in seen_ids:
+                    continue
+                seen_ids.add(external_id)
+
+                salary_min = item.get("minimumSalary")
+                salary_max = item.get("maximumSalary")
+                compensation = ""
+                if salary_min and salary_max:
+                    compensation = f"{salary_min:.0f} - {salary_max:.0f}"
+                elif salary_min:
+                    compensation = f"{salary_min:.0f}+"
+
+                jobs.append(
+                    ExternalJob(
+                        external_id=external_id,
+                        title=item.get("jobTitle", ""),
+                        company=item.get("employerName", ""),
+                        location=item.get("locationName", ""),
+                        description=item.get("jobDescription", ""),
+                        url=item.get("jobUrl", ""),
+                        compensation_raw=compensation,
+                    )
+                )
+
         return jobs

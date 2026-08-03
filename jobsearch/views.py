@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import CriteriaProfileForm, JobStatusForm, ThresholdRowForm
@@ -95,18 +96,29 @@ def run_search_view(request, pk):
     return redirect("jobsearch:job_list")
 
 
+JOBS_PER_PAGE = 20
+
+
 @login_required
 def job_list(request):
     status_filter = request.GET.get("status", "")
+    sponsor_filter = request.GET.get("sponsor_status", "")
     jobs = Job.objects.filter(owner=request.user)
     if status_filter:
         jobs = jobs.filter(status=status_filter)
+    if sponsor_filter:
+        jobs = jobs.filter(sponsor_status=sponsor_filter)
+
+    paginator = Paginator(jobs, JOBS_PER_PAGE)
+    page_obj = paginator.get_page(request.GET.get("page"))
 
     context = {
-        "jobs": jobs,
+        "jobs": page_obj,
+        "page_obj": page_obj,
         "status_choices": Job.Status.choices,
         "sponsor_choices": Job.SponsorStatus.choices,
         "status_filter": status_filter,
+        "sponsor_filter": sponsor_filter,
     }
     return render(request, "jobsearch/job_list.html", context)
 

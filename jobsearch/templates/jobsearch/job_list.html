@@ -14,6 +14,15 @@
         {% endfor %}
       </select>
     </label>
+    <label>
+      Filter by sponsor status:
+      <select name="sponsor_status" onchange="this.form.submit()">
+        <option value="">All</option>
+        {% for value, label in sponsor_choices %}
+          <option value="{{ value }}" {% if sponsor_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
   </form>
 
   {% for job in jobs %}
@@ -21,4 +30,20 @@
   {% empty %}
     <p>No jobs yet. <a href="{% url 'jobsearch:criteria_list' %}">Create a criteria profile</a> and run a search.</p>
   {% endfor %}
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <p>
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+      ({{ page_obj.paginator.count }} job{{ page_obj.paginator.count|pluralize }} total)
+    </p>
+    <p>
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sponsor_filter %}&sponsor_status={{ sponsor_filter }}{% endif %}">&larr; Previous</a>
+      {% endif %}
+      {% if page_obj.has_previous and page_obj.has_next %} &middot; {% endif %}
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sponsor_filter %}&sponsor_status={{ sponsor_filter }}{% endif %}">Next &rarr;</a>
+      {% endif %}
+    </p>
+  {% endif %}
 {% endblock %}
