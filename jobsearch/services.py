@@ -5,6 +5,7 @@ import re
 
 from .integrations.adzuna import AdzunaIntegration
 from .integrations.base import ExternalJob
+from .integrations.jsearch import JSearchIntegration
 from .integrations.reed import ReedIntegration
 from .models import CriteriaProfile, Job, ThresholdRow
 from .sponsor_register import apply_sponsor_check
@@ -35,6 +36,7 @@ def run_search(profile: CriteriaProfile) -> tuple[dict[str, list[ExternalJob]], 
     for source_key, display_name, integration in [
         (Job.Source.ADZUNA, "Adzuna", AdzunaIntegration()),
         (Job.Source.REED, "Reed", ReedIntegration()),
+        (Job.Source.JSEARCH, "JSearch", JSearchIntegration()),
     ]:
         try:
             results_by_source[source_key] = integration.search(

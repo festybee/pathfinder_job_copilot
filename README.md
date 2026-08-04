@@ -1,8 +1,10 @@
 # Pathfinder Job Copilot (v1 - Django)
 
 A personal job-search web app: define selectable search criteria (not
-hardcoded to any one title/country), pull matching postings from Adzuna
-and Reed, screen them against an editable occupation going-rate table
+hardcoded to any one title/country), pull matching postings from Adzuna,
+Reed, and JSearch (which itself aggregates Google for Jobs - LinkedIn,
+Indeed, Glassdoor, ZipRecruiter, and more), screen them against an
+editable occupation going-rate table
 (useful for visa sponsorship eligibility, but works for anyone), build a
 portfolio of CVs/certs/project write-ups, and generate tailored CVs,
 cover letters, and application Q&A answers grounded only in the portfolio
@@ -34,6 +36,7 @@ pathfinder-job-copilot/
       base.py               # ExternalJob dataclass + JobIntegration protocol
       adzuna.py              # Adzuna API client
       reed.py                 # Reed API client (UK only)
+      jsearch.py               # JSearch API client (aggregates Google for Jobs)
     management/commands/
       sync_sponsor_register.py  # downloads the gov.uk sponsor register CSV
       check_sponsors.py          # re-checks existing jobs against it
@@ -91,8 +94,16 @@ python manage.py runserver
 
 Visit `http://127.0.0.1:8000/accounts/signup/` to create your account, or
 `/admin/` with the superuser to manage data directly. Job search needs at
-least one of Adzuna or Reed credentials (both free tier); AI features
-need `ANTHROPIC_API_KEY`.
+least one of Adzuna, Reed, or JSearch credentials (all free tier); AI
+features need `ANTHROPIC_API_KEY`.
+
+**JSearch caveat**: I built `jsearch.py` from OpenWeb Ninja's published
+sample response and documented query parameters, not a live test against
+their search endpoint specifically - their docs page is JS-rendered and I
+couldn't fully load it. If it errors or returns nothing once you add a
+real key, the likely culprit is a field name or response-shape mismatch;
+check `response.json()` directly and adjust the parsing in
+`jobsearch/integrations/jsearch.py` accordingly.
 
 `sync_sponsor_register` downloads the UK government's list of licensed
 Worker/Temporary Worker sponsors from gov.uk (auto-discovers the current

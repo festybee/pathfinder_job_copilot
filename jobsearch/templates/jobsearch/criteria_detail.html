@@ -15,6 +15,7 @@
   </form>
 
   <p>
+    <a href="{% url 'jobsearch:job_list' %}?profile={{ profile.pk }}">View jobs found by this profile</a> &middot;
     <a href="{% url 'jobsearch:criteria_edit' profile.pk %}">Edit this profile</a> &middot;
     <a href="{% url 'jobsearch:criteria_delete' profile.pk %}">Delete it</a>
   </p>

@@ -23,6 +23,16 @@
         {% endfor %}
       </select>
     </label>
+    <label>
+      Filter by search criteria:
+      <select name="profile" onchange="this.form.submit()">
+        <option value="">All</option>
+        {% for profile in profiles %}
+          <option value="{{ profile.pk }}" {% if profile_filter == profile.pk|stringformat:"s" %}selected{% endif %}>{{ profile.name }}</option>
+        {% endfor %}
+        <option value="none" {% if profile_filter == "none" %}selected{% endif %}>Manually added (no profile)</option>
+      </select>
+    </label>
   </form>
 
   {% for job in jobs %}
@@ -38,11 +48,11 @@
     </p>
     <p>
       {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sponsor_filter %}&sponsor_status={{ sponsor_filter }}{% endif %}">&larr; Previous</a>
+        <a href="?page={{ page_obj.previous_page_number }}{{ extra_qs }}">&larr; Previous</a>
       {% endif %}
       {% if page_obj.has_previous and page_obj.has_next %} &middot; {% endif %}
       {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sponsor_filter %}&sponsor_status={{ sponsor_filter }}{% endif %}">Next &rarr;</a>
+        <a href="?page={{ page_obj.next_page_number }}{{ extra_qs }}">Next &rarr;</a>
       {% endif %}
     </p>
   {% endif %}

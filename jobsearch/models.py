@@ -103,6 +103,7 @@ class Job(models.Model):
     class Source(models.TextChoices):
         ADZUNA = "adzuna", "Adzuna"
         REED = "reed", "Reed"
+        JSEARCH = "jsearch", "JSearch"
         MANUAL = "manual", "Manually added"
 
     owner = models.ForeignKey(
