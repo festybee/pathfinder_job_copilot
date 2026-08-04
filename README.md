@@ -29,12 +29,16 @@ pathfinder-job-copilot/
   config/                  # project settings, root urls, wsgi/asgi
   accounts/                # login, signup (Django auth)
   portfolio/               # Document model - CV/cert/project library
-  jobsearch/               # CriteriaProfile, ThresholdRow, Job models
+  jobsearch/               # CriteriaProfile, ThresholdRow, Job, SponsorRegisterEntry models
     integrations/
       base.py               # ExternalJob dataclass + JobIntegration protocol
       adzuna.py              # Adzuna API client
       reed.py                 # Reed API client (UK only)
+    management/commands/
+      sync_sponsor_register.py  # downloads the gov.uk sponsor register CSV
+      check_sponsors.py          # re-checks existing jobs against it
     services.py              # run_search() / save_results() / evaluate_threshold()
+    sponsor_register.py      # company-name matching against the register
   aiassist/                # GeneratedDraft model + Anthropic-backed service.py
     service.py               # tailor_cv() / draft_cover_letter() / answer_question()
   templates/base.html      # shared layout + nav + HTMX script tag
@@ -46,17 +50,24 @@ pathfinder-job-copilot/
 ### Data model summary
 
 - `jobsearch.CriteriaProfile` - a saved search: keywords (comma-separated,
-  editable), location, country code, job type, and salary mode (either a
-  flat minimum or the going-rate table below). You can have several.
+  editable), location, country code, job type, salary mode (either a flat
+  minimum or the going-rate table below), and an optional
+  `include_sponsorship_keyword` toggle that adds "visa sponsorship" as an
+  extra, independent search term (weak signal - see below). You can have
+  several profiles.
 - `jobsearch.ThresholdRow` - one row of an occupation going-rate table
   scoped to a profile (keyword match, occupation code, threshold amount,
   currency, verified flag). Not UK-specific - edit the rows for any
   country's system.
 - `jobsearch.Job` - a posting pulled in by search (or added manually),
   with `status` (new → interested → tailoring → applied → interviewing →
-  offer/rejected), `sponsor_status` (unknown/likely/confirmed/no, set
-  manually - no source exposes this programmatically), and
-  `threshold_pass` (computed against the matched profile).
+  offer/rejected), `sponsor_status` (unknown/likely/confirmed/no - see
+  below for how "confirmed" gets set), and `threshold_pass` (computed
+  against the matched profile).
+- `jobsearch.SponsorRegisterEntry` - shared reference data: one row per UK
+  government-registered Worker/Temporary Worker sponsor, loaded via
+  `python manage.py sync_sponsor_register`. Matched against each job's
+  employer name to auto-set `sponsor_status = confirmed` - see below.
 - `portfolio.Document` - CV/certificate/project text you paste or upload;
   tagged and typed, feeds the AI layer.
 - `aiassist.GeneratedDraft` - a saved AI output (CV, cover letter, or Q&A
@@ -74,6 +85,7 @@ cp .env.example .env           # fill in ANTHROPIC_API_KEY, ADZUNA_*/REED_API_KE
 python manage.py makemigrations accounts portfolio jobsearch aiassist
 python manage.py migrate
 python manage.py createsuperuser
+python manage.py sync_sponsor_register   # loads the UK sponsor register (~a minute, one-time)
 python manage.py runserver
 ```
 
@@ -82,18 +94,32 @@ Visit `http://127.0.0.1:8000/accounts/signup/` to create your account, or
 least one of Adzuna or Reed credentials (both free tier); AI features
 need `ANTHROPIC_API_KEY`.
 
+`sync_sponsor_register` downloads the UK government's list of licensed
+Worker/Temporary Worker sponsors from gov.uk (auto-discovers the current
+CSV link, since the filename changes roughly monthly) and stores it
+locally. Re-run it periodically to keep it current, then run
+`python manage.py check_sponsors` to re-check any existing jobs that
+weren't confirmed the first time.
+
 ## What's genuinely working vs. what's a stub
 
 - **Working end-to-end**: signup/login, portfolio document CRUD, criteria
   profile + going-rate table CRUD, Adzuna/Reed search wired to real APIs,
   job tracker with status/sponsor updates, AI tailoring/cover
   letter/Q&A wired to the Anthropic API and grounded in selected documents.
-- **Manual by design (v1)**: sponsor-licence status is a dropdown you set
-  yourself - no API exposes this, so automating it would mean scraping a
-  government register, deliberately left out of v1.
-- **Not built yet**: automated sponsor-licence lookup, LinkedIn/company
-  career-page sources (no public API), auto-apply, password reset email,
-  deployment config.
+- **Sponsor-licence status**: two layers, neither claiming false
+  certainty. (1) A weak keyword heuristic - ticking
+  "include_sponsorship_keyword" on a criteria profile adds "visa
+  sponsorship" as an extra search term, surfacing postings that happen to
+  say so. (2) The real check - `sync_sponsor_register` loads the actual
+  gov.uk register, and every new job's employer name gets matched against
+  it (`jobsearch/sponsor_register.py`); a match auto-sets `sponsor_status
+  = confirmed`. A non-match is left as-is (never auto-set to "No") since
+  company names in postings often don't exactly match their registered
+  legal name - the system only ever asserts sponsorship when it's
+  confident, and otherwise leaves it to you.
+- **Not built yet**: LinkedIn/company career-page sources (no public
+  API), auto-apply, password reset email, deployment config.
 
 ## Housekeeping
 
@@ -108,8 +134,8 @@ convenient.
 
 ## Roadmap
 
-- v1 (this): manual pipeline end-to-end, single-user-per-login, sqlite by default
+- v1 (this): manual pipeline end-to-end, single-user-per-login, sqlite by default, sponsor-register cross-check
 - v1.1: password reset email, deploy to Railway/Render with Postgres
-- v1.2: automated sponsor-licence cross-check against a licensed-sponsor register
+- v1.2: scheduled/automatic re-sync of the sponsor register (currently manual)
 - v1.3: additional job sources as APIs become available
 - v2: auto-apply on user-approved jobs above a confidence threshold (deliberately out of scope until tailoring quality is proven out)

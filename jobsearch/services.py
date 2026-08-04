@@ -7,6 +7,7 @@ from .integrations.adzuna import AdzunaIntegration
 from .integrations.base import ExternalJob
 from .integrations.reed import ReedIntegration
 from .models import CriteriaProfile, Job, ThresholdRow
+from .sponsor_register import apply_sponsor_check
 
 _SALARY_NUM_RE = re.compile(r"[\d,]{4,}")
 
@@ -20,6 +21,14 @@ def run_search(profile: CriteriaProfile) -> tuple[dict[str, list[ExternalJob]], 
     missing API key) so one broken source doesn't fail the whole search.
     """
     keywords = profile.keyword_list()
+    if profile.include_sponsorship_keyword:
+        # Extra, independent search term - not ANDed with the role keywords,
+        # since "data analyst visa sponsorship" would rarely match anything.
+        # Weak signal: surfaces postings that happen to mention sponsorship,
+        # nothing more. See sponsor_register.check_sponsor_licence() for the
+        # actual reliable check.
+        keywords = keywords + ["visa sponsorship"]
+
     results_by_source: dict[str, list[ExternalJob]] = {}
     warnings: list[str] = []
 
@@ -96,5 +105,6 @@ def save_results(profile: CriteriaProfile, source_name: str, external_jobs: list
         if was_created:
             created += 1
             evaluate_threshold(job)
+            apply_sponsor_check(job)  # no-op if the register hasn't been synced yet
 
     return created

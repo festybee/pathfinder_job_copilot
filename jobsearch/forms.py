@@ -14,6 +14,7 @@ class CriteriaProfileForm(forms.ModelForm):
             "job_type",
             "salary_mode",
             "flat_minimum_salary",
+            "include_sponsorship_keyword",
         ]
 
 

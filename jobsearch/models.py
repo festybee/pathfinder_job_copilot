@@ -33,6 +33,15 @@ class CriteriaProfile(models.Model):
     flat_minimum_salary = models.PositiveIntegerField(
         null=True, blank=True, help_text="Only used when salary_mode = flat_minimum"
     )
+    include_sponsorship_keyword = models.BooleanField(
+        default=False,
+        help_text=(
+            "Also search 'visa sponsorship' as an extra term, to surface postings "
+            "that explicitly mention it. Weak signal - most sponsor-eligible jobs "
+            "don't say so in the text. See the going-rate table and sponsor-status "
+            "column for the more reliable checks."
+        ),
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -132,3 +141,29 @@ class Job(models.Model):
 
     def __str__(self):
         return f"{self.title} @ {self.company}"
+
+
+class SponsorRegisterEntry(models.Model):
+    """One row of the UK government's register of licensed Worker/Temporary
+    Worker sponsors. Shared reference data, not scoped to a user - populated
+    by `python manage.py sync_sponsor_register` and matched against by
+    company name (see jobsearch.sponsor_register.check_sponsor_licence).
+
+    Source: https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers
+    UK-specific by nature - other countries would need an equivalent
+    register and a separate model/command if this pattern gets reused.
+    """
+
+    organisation_name = models.CharField(max_length=300)
+    organisation_name_normalized = models.CharField(max_length=300)
+    town_city = models.CharField(max_length=150, blank=True)
+    county = models.CharField(max_length=150, blank=True)
+    rating = models.CharField(max_length=100, blank=True, help_text="'Type & Rating' column, e.g. 'Worker (A rating)'")
+    route = models.CharField(max_length=150, blank=True, help_text="e.g. 'Skilled Worker'")
+    synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["organisation_name_normalized"])]
+
+    def __str__(self):
+        return self.organisation_name
