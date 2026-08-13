@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ profile.name }} - Pathfinder Job Copilot{% endblock %}
+{% block content %}
+  <h1>{{ profile.name }}</h1>
+  <p>
+    Keywords: {{ profile.keywords }}<br>
+    Location: {{ profile.location|default:"any" }} &middot; Country: {{ profile.country_code }}<br>
+    Salary mode: {{ profile.get_salary_mode_display }}
+    {% if profile.salary_mode == "flat_minimum" %}(min {{ profile.flat_minimum_salary }}){% endif %}
+  </p>
+
+  <form method="post" action="{% url 'jobsearch:run_search' profile.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="primary">Run search now</button>
+  </form>
+
+  <p>
+    <a href="{% url 'jobsearch:job_list' %}?profile={{ profile.pk }}">View jobs found by this profile</a> &middot;
+    <a href="{% url 'jobsearch:criteria_edit' profile.pk %}">Edit this profile</a> &middot;
+    <a href="{% url 'jobsearch:criteria_delete' profile.pk %}">Delete it</a>
+  </p>
+
+  {% include "jobsearch/_threshold_rows.html" %}
+{% endblock %}

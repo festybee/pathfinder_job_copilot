@@ -1,0 +1,11 @@
+<form method="post"
+      enctype="multipart/form-data"
+      class="stacked card"
+      hx-post="{% url 'portfolio:document_list' %}"
+      hx-target="#document-and-form"
+      hx-swap="outerHTML"
+      id="document-form">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit" class="primary">Add to portfolio</button>
+</form>

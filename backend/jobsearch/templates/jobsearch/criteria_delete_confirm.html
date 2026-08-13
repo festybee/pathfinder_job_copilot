@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ profile.name }} - Pathfinder Job Copilot{% endblock %}
+{% block content %}
+  <h1>Delete "{{ profile.name }}"?</h1>
+  <p>This also deletes its going-rate table rows. Jobs already found through this profile stay in your tracker, just unlinked from it.</p>
+  <form method="post" class="card">
+    {% csrf_token %}
+    <button type="submit" class="primary">Yes, delete it</button>
+  </form>
+  <p><a href="{% url 'jobsearch:criteria_detail' profile.pk %}">Cancel</a></p>
+{% endblock %}
