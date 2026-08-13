@@ -1,4 +1,4 @@
-# Pathfinder Job Copilot (v1 - Django)
+# Pathfinder Job Copilot (v1 - Django + React)
 
 A personal job-search web app: define selectable search criteria (not
 hardcoded to any one title/country), pull matching postings from Adzuna,
@@ -12,42 +12,69 @@ documents you select. Every user has their own login and their own data.
 
 ## Stack, and why
 
-Single Django project, server-rendered templates + [HTMX](https://htmx.org)
-for interactivity - no separate frontend framework/build step. Django
-renders HTML directly from Python; HTMX attributes (`hx-post`, `hx-target`)
-let specific parts of a page update via small server round-trips without a
-full reload or a JSON API layer in between. One language, one deployable
-process, matches the stack you already know (Django/Python/BCS Full-Stack).
+Two UIs, one Django backend, sharing the same database:
 
-Auth is Django's built-in session-based auth (`django.contrib.auth`) -
-every model that holds user data (`Document`, `CriteriaProfile`, `Job`)
-has an `owner` ForeignKey, and views are wrapped with `@login_required`.
+1. **Server-rendered templates + [HTMX](https://htmx.org)** (`templates/`, and
+   `templates/` inside each app) - the original UI, unchanged, still fully
+   functional at `/`, `/criteria/`, `/portfolio/`, etc. No build step.
+2. **A separate React app** (`frontend/`) talking to a REST API
+   (`django rest framework`, under `/api/`) - added because a plain
+   template UI made it hard to keep concerns (search, results, tracker,
+   portfolio, AI actions) visually and structurally separate as the app
+   grew. Runs as its own process (`npm run dev`, port 5173 by default).
+
+Both are optional entry points into the same data - create a criteria
+profile in one, see it in the other. If you only ever use one of them,
+that's fine; the other doesn't need to be running.
+
+Auth is Django's built-in `django.contrib.auth` for the template UI
+(session cookies), and DRF token authentication for the API
+(`Authorization: Token <key>` header) - session cookies don't play nicely
+across two different origins/ports without extra CORS/CSRF plumbing that
+isn't worth it for a personal project, so the API uses its own token
+instead. Every model that holds user data (`Document`, `CriteriaProfile`,
+`Job`) has an `owner` ForeignKey either way, and both the template views
+and the API views filter to `request.user`.
 
 ## App layout
 
+Physically split into `backend/` and `frontend/`, sitting side by side:
+
 ```
 pathfinder-job-copilot/
-  manage.py
-  config/                  # project settings, root urls, wsgi/asgi
-  accounts/                # login, signup (Django auth)
-  portfolio/               # Document model - CV/cert/project library
-  jobsearch/               # CriteriaProfile, ThresholdRow, Job, SponsorRegisterEntry models
-    integrations/
-      base.py               # ExternalJob dataclass + JobIntegration protocol
-      adzuna.py              # Adzuna API client
-      reed.py                 # Reed API client (UK only)
-      jsearch.py               # JSearch API client (aggregates Google for Jobs)
-    management/commands/
-      sync_sponsor_register.py  # downloads the gov.uk sponsor register CSV
-      check_sponsors.py          # re-checks existing jobs against it
-    services.py              # run_search() / save_results() / evaluate_threshold()
-    sponsor_register.py      # company-name matching against the register
-  aiassist/                # GeneratedDraft model + Anthropic-backed service.py
-    service.py               # tailor_cv() / draft_cover_letter() / answer_question()
-  templates/base.html      # shared layout + nav + HTMX script tag
-  static/css/style.css
-  requirements.txt
-  .env.example
+  backend/                 # Django project - everything below was under the repo root before
+    manage.py
+    config/                  # project settings, root urls, wsgi/asgi
+    accounts/                # login, signup (Django auth) + serializers.py/api_views.py/api_urls.py
+    portfolio/               # Document model - CV/cert/project library + API equivalents
+    jobsearch/               # CriteriaProfile, ThresholdRow, Job, SponsorRegisterEntry models
+      integrations/
+        base.py               # ExternalJob dataclass + JobIntegration protocol
+        adzuna.py              # Adzuna API client
+        reed.py                 # Reed API client (UK only)
+        jsearch.py               # JSearch API client (aggregates Google for Jobs)
+      management/commands/
+        sync_sponsor_register.py  # downloads the gov.uk sponsor register CSV
+        check_sponsors.py          # re-checks existing jobs against it
+      services.py              # run_search() / save_results() / evaluate_threshold()
+      sponsor_register.py      # company-name matching against the register
+      serializers.py, api_views.py, api_urls.py   # REST API for this app
+    aiassist/                # GeneratedDraft model + Anthropic-backed service.py
+      service.py               # tailor_cv() / draft_cover_letter() / answer_question()
+      serializers.py, api_views.py, api_urls.py
+    templates/base.html      # shared layout + nav + HTMX script tag (template UI)
+    static/css/style.css
+    requirements.txt
+    .env.example
+    .gitignore
+  frontend/                # separate React app (Vite) - the other UI
+    src/
+      api.js                # fetch wrapper + all API calls
+      AuthContext.jsx        # login/signup/logout + current-user state
+      App.jsx                 # routes
+      pages/                   # JobsPage, CriteriaListPage, CriteriaDetailPage,
+                                # PortfolioPage, AiAssistPage, LoginPage, SignupPage
+      components/               # NavBar, ProtectedRoute
 ```
 
 ### Data model summary
@@ -79,8 +106,10 @@ pathfinder-job-copilot/
 
 ## Setup
 
+### Backend (required either way)
+
 ```bash
-cd pathfinder-job-copilot
+cd pathfinder-job-copilot/backend
 python -m venv .venv
 source .venv/bin/activate      # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
@@ -92,10 +121,30 @@ python manage.py sync_sponsor_register   # loads the UK sponsor register (~a min
 python manage.py runserver
 ```
 
-Visit `http://127.0.0.1:8000/accounts/signup/` to create your account, or
-`/admin/` with the superuser to manage data directly. Job search needs at
-least one of Adzuna, Reed, or JSearch credentials (all free tier); AI
-features need `ANTHROPIC_API_KEY`.
+Visit `http://127.0.0.1:8000/accounts/signup/` to create your account
+through the template UI, or `/admin/` with the superuser to manage data
+directly. Job search needs at least one of Adzuna, Reed, or JSearch
+credentials (all free tier); AI features need `ANTHROPIC_API_KEY`.
+
+### Frontend (optional - the React UI)
+
+In a second terminal, with the backend above still running:
+
+```bash
+cd pathfinder-job-copilot/frontend
+npm install
+cp .env.example .env    # VITE_API_BASE_URL, defaults to http://localhost:8000/api
+npm run dev
+```
+
+Visit `http://localhost:5173` and sign up there - it creates its own
+account via the API (same `User` table, so it's separate from any account
+you made through the template UI's signup unless you use the same
+username). I couldn't run `npm install` or `npm run dev` myself this
+session (same broken-shell issue as elsewhere), so this hasn't been
+executed - if something doesn't compile, it's most likely a small typo
+rather than a structural problem; the component logic mirrors the
+already-working template views closely.
 
 **JSearch caveat**: I built `jsearch.py` from OpenWeb Ninja's published
 sample response and documented query parameters, not a live test against
@@ -131,21 +180,55 @@ weren't confirmed the first time.
   confident, and otherwise leaves it to you.
 - **Not built yet**: LinkedIn/company career-page sources (no public
   API), auto-apply, password reset email, deployment config.
+- **Frontend**: hand-written, not yet run/compiled (see the Setup note
+  above) - covers the same ground as the template UI (auth, job tracker
+  with filters, criteria + going-rate table CRUD, portfolio CRUD, AI
+  actions), styled plainly, no polish pass done yet.
+
+### Fixed along the way
+
+Two real bugs worth knowing about if you're diffing history: the
+`include_sponsorship_keyword` heuristic used to merge "visa sponsorship"
+into the same query as your role keywords, which meant totally unrelated
+postings (e.g. "Support Worker" showing up under a "Data Analyst" search)
+could get pulled in - it's now a separate search pass, only kept if the
+result is also relevant to your actual keywords. And Reed's search
+endpoint (unlike Adzuna) returns raw salary numbers with no currency or
+pay-period field, so a small hourly rate could get silently compared
+against an annual threshold as if it were a yearly salary - `evaluate_threshold`
+now treats implausibly low figures (<1000) as unparseable instead of
+guessing.
 
 ## Housekeeping
 
+**After the backend/frontend split**, every backend file now lives under
+`backend/` (copied there, not moved - I can't move or delete files in
+this environment). The old root-level copies are now stale duplicates
+and should be deleted manually via File Explorer once you've confirmed
+`backend/` works:
+
+- `manage.py`, `config/`, `accounts/`, `portfolio/`, `jobsearch/`,
+  `aiassist/`, `templates/`, `static/`, root `requirements.txt`, root
+  `.env.example` - all now duplicated under `backend/`, delete the
+  root-level originals.
+- `.venv/` - **don't delete**; instead recreate it inside `backend/`
+  (`cd backend && python -m venv .venv`) since a venv can't just be
+  copied between locations.
+- `.env` (your real secrets, not `.env.example`) - move it into
+  `backend/.env` yourself; I never touch real secrets.
+- `db.sqlite3`, if it exists at the root - move it into `backend/`
+  (or just re-run migrations there and re-add your data/superuser).
+
 This folder also has a `src/`, `tests/`, `data/`, and old root-level
-`requirements.txt`/`pyproject.toml` left over from an earlier
-standalone-CLI prototype that predates the decision to build this as a
-Django web app. They're unrelated to the app above and safe to delete
-(`src/`, `tests/`, `data/`, `pyproject.toml`) - I couldn't remove them
-from this session because the shell tool is currently broken by a stale
-WSL folder reference; delete them manually via File Explorer whenever
-convenient.
+`pyproject.toml` left over from an earlier standalone-CLI prototype that
+predates the decision to build this as a Django web app - unrelated to
+the app above, safe to delete alongside the stale root-level Django
+files.
 
 ## Roadmap
 
-- v1 (this): manual pipeline end-to-end, single-user-per-login, sqlite by default, sponsor-register cross-check
+- v1 (this): manual pipeline end-to-end, single-user-per-login, sqlite by default, sponsor-register cross-check, REST API + React frontend alongside the template UI
+- v1.0.1: run `npm install && npm run dev` for real, fix whatever that surfaces
 - v1.1: password reset email, deploy to Railway/Render with Postgres
 - v1.2: scheduled/automatic re-sync of the sponsor register (currently manual)
 - v1.3: additional job sources as APIs become available
