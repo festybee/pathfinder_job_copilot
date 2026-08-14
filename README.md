@@ -146,13 +146,15 @@ executed - if something doesn't compile, it's most likely a small typo
 rather than a structural problem; the component logic mirrors the
 already-working template views closely.
 
-**JSearch caveat**: I built `jsearch.py` from OpenWeb Ninja's published
-sample response and documented query parameters, not a live test against
-their search endpoint specifically - their docs page is JS-rendered and I
-couldn't fully load it. If it errors or returns nothing once you add a
-real key, the likely culprit is a field name or response-shape mismatch;
-check `response.json()` directly and adjust the parsing in
-`jobsearch/integrations/jsearch.py` accordingly.
+**JSearch fixed**: the initial version assumed `search-v2` returned
+`{"data": [...]}` (a list of jobs directly). The real shape, per OpenWeb
+Ninja's docs, nests it one level deeper - `{"data": {"jobs": [...],
+"cursor": "..."}}` - so the old code was iterating over the dict's keys
+("jobs", "cursor") instead of the job objects, throwing `'str' object
+has no attribute 'get'`. Fixed in `jobsearch/integrations/jsearch.py`.
+Note most JSearch postings don't include salary data at all (only
+populated when the employer explicitly states it), so an empty
+`compensation_raw` for JSearch results is expected, not a bug.
 
 `sync_sponsor_register` downloads the UK government's list of licensed
 Worker/Temporary Worker sponsors from gov.uk (auto-discovers the current
@@ -198,6 +200,18 @@ pay-period field, so a small hourly rate could get silently compared
 against an annual threshold as if it were a yearly salary - `evaluate_threshold`
 now treats implausibly low figures (<1000) as unparseable instead of
 guessing.
+
+JSearch had two bugs of its own, both now fixed. First, the response
+shape was mis-parsed - jobs are nested under `data.jobs`, not `data`
+directly, so results were silently empty/erroring. Second, and more
+seriously: JSearch's own `country` request param isn't reliably honored
+by the API, so a GB-scoped search could - and did - return US postings
+(and others) mixed in. `jobsearch/integrations/jsearch.py` now filters
+each result against the requested country client-side using the result's
+own `job_country` field, so this won't recur for new searches. Jobs
+already saved from before this fix can be cleaned up with
+`python manage.py purge_bad_jsearch_jobs --dry-run` (then without
+`--dry-run` once you're happy with what it lists).
 
 ## Housekeeping
 

@@ -9,13 +9,12 @@ offer open APIs to third-party developers.
 Free tier: 200 requests/month, then $25/mo for 10,000. Get a key at
 https://www.openwebninja.com/api/jsearch (also available via RapidAPI).
 
-Note: OpenWeb Ninja's docs page is JS-rendered and I couldn't fully load
-it, so this is built from their published sample response data (a
-per-job object schema shown for a job-detail lookup) plus documented
-query parameters, not a live test against search-v2 specifically. If
-field names don't line up with what you actually get back, print/inspect
-response.json() and adjust the parsing below - the shape may differ
-slightly for search results vs. the single-job sample.
+Response shape (confirmed against OpenWeb Ninja's docs): the job list is
+nested under data.jobs, not data itself -
+    {"status": "OK", "request_id": "...", "data": {"jobs": [...], "cursor": "..."}}
+Salary fields are only populated when the employer explicitly included
+pay in the posting - most postings won't have compensation_raw set, and
+that's expected, not a bug.
 """
 from __future__ import annotations
 
@@ -25,6 +24,27 @@ from django.conf import settings
 from .base import ExternalJob
 
 _SEARCH_URL = "https://api.openwebninja.com/jsearch/search-v2"
+
+# JSearch's own "country" request param doesn't reliably restrict results
+# to that country in practice - e.g. a country="gb" search can still
+# return US postings. So in addition to sending the param (harmless, may
+# help narrow results somewhat), we also filter client-side using each
+# result's own job_country field. Only maps countries this app's
+# CriteriaProfile.country_code actually supports; a country_code with no
+# entry here is left unfiltered rather than silently dropping everything.
+_COUNTRY_NAME_VARIANTS = {
+    "GB": {"united kingdom", "uk", "gb", "england", "scotland", "wales", "northern ireland"},
+    "US": {"united states", "usa", "us", "united states of america"},
+    "CA": {"canada", "ca"},
+    "AU": {"australia", "au"},
+    "NZ": {"new zealand", "nz"},
+    "IE": {"ireland", "ie"},
+    "DE": {"germany", "de"},
+    "FR": {"france", "fr"},
+    "NL": {"netherlands", "nl"},
+    "IN": {"india", "in"},
+    "SG": {"singapore", "sg"},
+}
 
 
 class JSearchIntegration:
@@ -43,6 +63,7 @@ class JSearchIntegration:
             )
 
         is_remote = bool(location) and location.lower() == "remote"
+        expected_country_names = _COUNTRY_NAME_VARIANTS.get(country_code.upper()) if country_code else None
 
         jobs: list[ExternalJob] = []
         seen_ids: set[str] = set()
@@ -70,11 +91,17 @@ class JSearchIntegration:
             response.raise_for_status()
             payload = response.json()
 
-            for item in payload.get("data", []):
+            for item in (payload.get("data") or {}).get("jobs", []):
                 external_id = str(item.get("job_id", ""))
                 if not external_id or external_id in seen_ids:
                     continue
                 seen_ids.add(external_id)
+
+                # Reject results the API returned for a clearly different
+                # country than requested - see _COUNTRY_NAME_VARIANTS above.
+                item_country = (item.get("job_country") or "").strip().lower()
+                if expected_country_names and item_country and item_country not in expected_country_names:
+                    continue
 
                 salary_min = item.get("job_min_salary")
                 salary_max = item.get("job_max_salary")

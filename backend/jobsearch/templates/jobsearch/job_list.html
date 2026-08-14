@@ -24,6 +24,15 @@
       </select>
     </label>
     <label>
+      Filter by salary threshold:
+      <select name="threshold_pass" onchange="this.form.submit()">
+        <option value="">All</option>
+        <option value="pass" {% if threshold_filter == "pass" %}selected{% endif %}>Clears threshold</option>
+        <option value="fail" {% if threshold_filter == "fail" %}selected{% endif %}>Below threshold</option>
+        <option value="unevaluated" {% if threshold_filter == "unevaluated" %}selected{% endif %}>Not evaluated</option>
+      </select>
+    </label>
+    <label>
       Filter by search criteria:
       <select name="profile" onchange="this.form.submit()">
         <option value="">All</option>

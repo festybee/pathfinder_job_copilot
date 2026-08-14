@@ -101,11 +101,15 @@ def run_search_view(request, pk):
 JOBS_PER_PAGE = 20
 
 
+_THRESHOLD_FILTER_VALUES = {"pass": True, "fail": False, "unevaluated": None}
+
+
 @login_required
 def job_list(request):
     status_filter = request.GET.get("status", "")
     sponsor_filter = request.GET.get("sponsor_status", "")
     profile_filter = request.GET.get("profile", "")
+    threshold_filter = request.GET.get("threshold_pass", "")
     jobs = Job.objects.filter(owner=request.user)
     if status_filter:
         jobs = jobs.filter(status=status_filter)
@@ -116,6 +120,8 @@ def job_list(request):
             jobs = jobs.filter(profile__isnull=True)
         else:
             jobs = jobs.filter(profile_id=profile_filter)
+    if threshold_filter in _THRESHOLD_FILTER_VALUES:
+        jobs = jobs.filter(threshold_pass=_THRESHOLD_FILTER_VALUES[threshold_filter])
 
     paginator = Paginator(jobs, JOBS_PER_PAGE)
     page_obj = paginator.get_page(request.GET.get("page"))
@@ -126,6 +132,7 @@ def job_list(request):
             "status": status_filter,
             "sponsor_status": sponsor_filter,
             "profile": profile_filter,
+            "threshold_pass": threshold_filter,
         }.items()
         if v
     }
@@ -139,6 +146,7 @@ def job_list(request):
         "status_filter": status_filter,
         "sponsor_filter": sponsor_filter,
         "profile_filter": profile_filter,
+        "threshold_filter": threshold_filter,
         "profiles": CriteriaProfile.objects.filter(owner=request.user),
         "extra_qs": extra_qs,
     }
