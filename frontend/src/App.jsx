@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import NavBar from "./components/NavBar.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import StaffRoute from "./components/StaffRoute.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import SignupPage from "./pages/SignupPage.jsx";
 import JobsPage from "./pages/JobsPage.jsx";
@@ -8,6 +9,7 @@ import CriteriaListPage from "./pages/CriteriaListPage.jsx";
 import CriteriaDetailPage from "./pages/CriteriaDetailPage.jsx";
 import PortfolioPage from "./pages/PortfolioPage.jsx";
 import AiAssistPage from "./pages/AiAssistPage.jsx";
+import ApprovalsPage from "./pages/ApprovalsPage.jsx";
 
 export default function App() {
   return (
@@ -54,6 +56,14 @@ export default function App() {
             <ProtectedRoute>
               <PortfolioPage />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/approvals"
+          element={
+            <StaffRoute>
+              <ApprovalsPage />
+            </StaffRoute>
           }
         />
         <Route path="/" element={<Navigate to="/jobs" replace />} />

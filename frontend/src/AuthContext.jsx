@@ -27,8 +27,15 @@ export function AuthProvider({ children }) {
 
   const doSignup = useCallback(async (username, email, password) => {
     const data = await api.signup(username, email, password);
-    api.setToken(data.token);
-    setUser(data.user);
+    // New accounts are inactive until an admin approves them in /admin/,
+    // so signup no longer returns a token - nothing to log in with yet.
+    // Return the raw response so the caller (SignupPage) can show the
+    // pending-approval message instead of assuming it's now logged in.
+    if (data.token) {
+      api.setToken(data.token);
+      setUser(data.user);
+    }
+    return data;
   }, []);
 
   const doLogout = useCallback(async () => {

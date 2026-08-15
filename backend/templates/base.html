@@ -17,6 +17,9 @@
         <a href="{% url 'jobsearch:job_list' %}">Jobs</a>
         <a href="{% url 'jobsearch:criteria_list' %}">Criteria</a>
         <a href="{% url 'portfolio:document_list' %}">Portfolio</a>
+        {% if user.is_staff %}
+          <a href="{% url 'accounts:pending_approvals' %}">Approvals</a>
+        {% endif %}
         <form method="post" action="{% url 'accounts:logout' %}" class="inline-form">
           {% csrf_token %}
           <button type="submit" class="link-button">Log out ({{ user.username }})</button>

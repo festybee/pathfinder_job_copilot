@@ -21,6 +21,7 @@ export default function NavBar() {
             <Link to="/jobs">Jobs</Link>
             <Link to="/criteria">Criteria</Link>
             <Link to="/portfolio">Portfolio</Link>
+            {user.is_staff && <Link to="/approvals">Approvals</Link>}
             <button className="link-button" onClick={handleLogout}>
               Log out ({user.username})
             </button>

@@ -6,7 +6,7 @@ from rest_framework import serializers
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username", "email"]
+        fields = ["id", "username", "email", "is_staff", "is_active", "date_joined"]
 
 
 class SignupSerializer(serializers.ModelSerializer):
@@ -22,8 +22,12 @@ class SignupSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        # is_active=False - accounts need admin approval (flip "Active" on
+        # in /admin/) before they can log in. See api_views.login for how
+        # that's surfaced back to the caller.
         return User.objects.create_user(
             username=validated_data["username"],
             email=validated_data["email"],
             password=validated_data["password"],
+            is_active=False,
         )

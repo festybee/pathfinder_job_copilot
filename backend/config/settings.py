@@ -118,6 +118,14 @@ LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "jobsearch:job_list"
 LOGOUT_REDIRECT_URL = "accounts:login"
 
+# New signups are created with is_active=False (see accounts.forms and
+# accounts.serializers) and need an admin to flip them to active in
+# /admin/ before they can log in. AllowAllUsersModelBackend (unlike the
+# default ModelBackend) still lets authenticate() succeed for inactive
+# users instead of silently returning None, so both login views below can
+# tell "wrong password" apart from "pending approval" and say so.
+AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.AllowAllUsersModelBackend"]
+
 # --- Third-party API keys (all optional at import time, checked when used) ---
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 ADZUNA_APP_ID = os.environ.get("ADZUNA_APP_ID")

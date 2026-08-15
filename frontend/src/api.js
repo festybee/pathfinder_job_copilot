@@ -76,6 +76,10 @@ export const logout = () => apiFetch("/auth/logout/", { method: "POST" });
 
 export const fetchMe = () => apiFetch("/auth/me/");
 
+// --- Admin approval (staff only - server enforces this via IsAdminUser) ---
+export const fetchPendingUsers = () => apiFetch("/auth/pending-users/");
+export const approveUser = (id) => apiFetch(`/auth/pending-users/${id}/approve/`, { method: "POST" });
+
 // --- Reference data ---
 export const fetchChoices = () => apiFetch("/jobsearch/choices/");
 

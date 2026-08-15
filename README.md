@@ -163,9 +163,26 @@ locally. Re-run it periodically to keep it current, then run
 `python manage.py check_sponsors` to re-check any existing jobs that
 weren't confirmed the first time.
 
+## Admin-approved signups
+
+New accounts (through either UI) are created with `is_active=False` and
+can't log in until an admin approves them. To approve someone: log into
+`/admin/` as your superuser, open Authentication and Authorization > Users,
+tick the "Active" checkbox on their row, and click Save at the bottom -
+no need to open their individual profile. Newest signups sort to the top.
+
+Both login paths (template and API) tell a pending user that their
+account needs approval, rather than showing a generic "invalid
+credentials" message - this needs `AUTHENTICATION_BACKENDS` set to
+`AllowAllUsersModelBackend` in `settings.py` (already done), since the
+default backend silently treats inactive users the same as a wrong
+password. Your own superuser account (via `createsuperuser`) is active
+immediately and isn't affected by any of this.
+
 ## What's genuinely working vs. what's a stub
 
-- **Working end-to-end**: signup/login, portfolio document CRUD, criteria
+- **Working end-to-end**: signup/login (with admin approval gating - see
+  above), portfolio document CRUD, criteria
   profile + going-rate table CRUD, Adzuna/Reed search wired to real APIs,
   job tracker with status/sponsor updates, AI tailoring/cover
   letter/Q&A wired to the Anthropic API and grounded in selected documents.

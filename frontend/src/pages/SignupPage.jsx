@@ -9,6 +9,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [pendingMessage, setPendingMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -16,14 +17,32 @@ export default function SignupPage() {
     setError("");
     setSubmitting(true);
     try {
-      await signup(username, email, password);
-      navigate("/jobs");
+      const data = await signup(username, email, password);
+      if (data.token) {
+        navigate("/jobs");
+      } else {
+        // Account created but inactive - stay here and show the message
+        // instead of navigating somewhere that requires being logged in.
+        setPendingMessage(data.detail || "Account created. An admin needs to approve it before you can log in.");
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (pendingMessage) {
+    return (
+      <div className="container">
+        <h1>Almost there</h1>
+        <p className="message">{pendingMessage}</p>
+        <p>
+          Once approved, you can <Link to="/login">log in</Link>.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
