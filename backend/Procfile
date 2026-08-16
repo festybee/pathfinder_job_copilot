@@ -1,2 +1,4 @@
-release: python manage.py migrate && python manage.py collectstatic --noinput
-web: gunicorn config.wsgi --bind 0.0.0.0:$PORT
+# Railway doesn't run the `release:` line (that's a Heroku convention) -
+# migrate/collectstatic are folded into the Start Command instead, set
+# directly in Railway's dashboard under Settings > Deploy > Start Command:
+web: python manage.py migrate && python manage.py collectstatic --noinput && gunicorn config.wsgi --bind 0.0.0.0:$PORT
