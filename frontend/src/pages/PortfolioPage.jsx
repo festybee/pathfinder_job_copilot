@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as api from "../api.js";
+import GuidePanel from "../components/GuidePanel.jsx";
 
 const emptyForm = { title: "", doc_type: "other", tags: "", body_text: "" };
 const DOC_TYPES = [
@@ -40,6 +41,28 @@ export default function PortfolioPage() {
 
   return (
     <div className="container">
+      <GuidePanel pageKey="portfolio" title="What goes here">
+        <p>
+          Store the raw material AI tools draw from: your <strong>CV</strong>, certificates, and project
+          write-ups.
+        </p>
+        <ul>
+          <li>
+            <strong>Body text</strong> is what gets read - paste your actual CV text or key bullet points,
+            not just a title
+          </li>
+          <li>
+            <strong>Tags</strong> (skills/keywords) help you find the right document later, e.g.{" "}
+            <code>python, sql, agile</code>
+          </li>
+          <li>
+            Nothing here is used automatically - when you tailor a CV or write a cover letter for a job,
+            you pick which documents to include
+          </li>
+        </ul>
+        <p>Add your main CV first, then anything else worth drawing on: certificates, past projects, etc.</p>
+      </GuidePanel>
+
       <h1>Your portfolio</h1>
       <p>
         CVs, certificates, and project write-ups. Tick the ones relevant to a job when tailoring a CV or

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../api.js";
+import GuidePanel from "../components/GuidePanel.jsx";
 
 const emptyForm = {
   name: "",
@@ -53,6 +54,39 @@ export default function CriteriaListPage() {
 
   return (
     <div className="container">
+      <GuidePanel pageKey="criteria-list" title="How to fill this in">
+        <p>
+          A <strong>criteria profile</strong> is a saved search. Create one per type of role you want to
+          track - you can have several.
+        </p>
+        <ul>
+          <li>
+            <strong>Keywords</strong>: comma-separated terms to search for, e.g.{" "}
+            <code>data analyst, business analyst</code>
+          </li>
+          <li>
+            <strong>Location</strong>: a city, or <code>remote</code> - leave blank to search anywhere
+          </li>
+          <li>
+            <strong>Country code</strong>: 2 letters, e.g. <code>GB</code> - restricts results to that
+            country
+          </li>
+          <li>
+            <strong>Salary mode</strong>: <em>going-rate table</em> checks each job against per-role
+            thresholds you define after creating the profile (best for visa-sponsorship checks);{" "}
+            <em>flat minimum</em> just checks against one number you set below
+          </li>
+          <li>
+            The sponsorship checkbox is optional and a weak signal - only leave it on if you want "visa
+            sponsorship" tried as an extra search term
+          </li>
+        </ul>
+        <p>
+          After saving, click into the profile to add going-rate rows (if needed) and run your first
+          search.
+        </p>
+      </GuidePanel>
+
       <h1>Search criteria</h1>
       <p>Nothing here is fixed - add as many keyword/location/salary-mode combinations as you want.</p>
 

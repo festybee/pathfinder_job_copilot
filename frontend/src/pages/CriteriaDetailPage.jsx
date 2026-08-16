@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import * as api from "../api.js";
+import GuidePanel from "../components/GuidePanel.jsx";
 
 const emptyRow = { keyword_match: "", occupation_code: "", threshold_amount: "", currency: "GBP", verified: false, source_note: "" };
 
@@ -70,6 +71,24 @@ export default function CriteriaDetailPage() {
 
   return (
     <div className="container">
+      <GuidePanel pageKey="criteria-detail" title="What happens here">
+        <p>
+          <strong>Run search now</strong> queries job sites for postings matching this profile's keywords
+          and location, and adds any new ones to your <Link to="/jobs">job tracker</Link>.
+        </p>
+        <p>
+          The <strong>going-rate table</strong> below only matters if this profile's salary mode is
+          "going-rate table". Add one row per role type, e.g. keyword <code>data analyst</code> matched to
+          the official minimum salary for that occupation (such as a UK Skilled Worker visa going rate).
+          Jobs matching that keyword get checked against the figure you enter, and marked as clearing or
+          missing the threshold.
+        </p>
+        <p>
+          If this profile's salary mode is "flat minimum" instead, you can ignore the table entirely - just
+          click Run search.
+        </p>
+      </GuidePanel>
+
       <h1>{profile.name}</h1>
       <p>
         Keywords: {profile.keywords}

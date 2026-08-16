@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import * as api from "../api.js";
+import GuidePanel from "../components/GuidePanel.jsx";
 
 const PAGE_SIZE = 20;
 
@@ -114,6 +115,28 @@ export default function JobsPage() {
 
   return (
     <div className="container">
+      <GuidePanel pageKey="jobs" title="Getting started">
+        <p>
+          This is your <strong>job tracker</strong> - every job you find lands here, whether it came from
+          an automated search or you added it manually.
+        </p>
+        <p>
+          Jobs don't appear by themselves. First,{" "}
+          <Link to="/criteria">create a criteria profile</Link> (keywords, location, and a salary rule),
+          then open it and click <strong>Run search now</strong>. New matches show up back here.
+        </p>
+        <p>Once jobs are listed, you can:</p>
+        <ul>
+          <li>Update <strong>Status</strong> and <strong>Sponsor</strong> as you apply and hear back</li>
+          <li>Filter the list by status, sponsor status, or which profile found it</li>
+          <li>Use <strong>Tailor CV</strong>, <strong>Cover letter</strong>, or <strong>Q&amp;A</strong> on any job for AI help</li>
+        </ul>
+        <p>
+          The <strong>clears threshold</strong> / <strong>below threshold</strong> pill shows whether that
+          job's pay meets the salary rule on the profile that found it.
+        </p>
+      </GuidePanel>
+
       <h1>Job tracker</h1>
       <p>
         <Link to="/criteria">Manage search criteria</Link>
