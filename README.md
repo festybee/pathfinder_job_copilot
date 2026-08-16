@@ -1,4 +1,4 @@
-# Pathfinder Job Copilot (v1 - Django + React)
+# Pathfinder Job Copilot (v1 - Django API + React)
 
 A personal job-search web app: define selectable search criteria (not
 hardcoded to any one title/country), pull matching postings from Adzuna,
@@ -12,41 +12,31 @@ documents you select. Every user has their own login and their own data.
 
 ## Stack, and why
 
-Two UIs, one Django backend, sharing the same database:
+Two deployables, one database: `backend/` is a Django REST Framework API
+(`/api/...`), `frontend/` is a React (Vite) app - the single UI. Intended
+deployment is `frontend/` on Vercel and `backend/` on Railway, as two
+separate services talking over HTTPS. Django's own `/admin/` panel stays
+mounted for superuser/user-approval management, but there's no other
+server-rendered UI - an earlier version had a parallel HTMX + Django
+template UI, which was removed once the React app had full feature
+parity, to avoid maintaining (and accidentally diverging) two frontends.
 
-1. **Server-rendered templates + [HTMX](https://htmx.org)** (`templates/`, and
-   `templates/` inside each app) - the original UI, unchanged, still fully
-   functional at `/`, `/criteria/`, `/portfolio/`, etc. No build step.
-2. **A separate React app** (`frontend/`) talking to a REST API
-   (`django rest framework`, under `/api/`) - added because a plain
-   template UI made it hard to keep concerns (search, results, tracker,
-   portfolio, AI actions) visually and structurally separate as the app
-   grew. Runs as its own process (`npm run dev`, port 5173 by default).
-
-Both are optional entry points into the same data - create a criteria
-profile in one, see it in the other. If you only ever use one of them,
-that's fine; the other doesn't need to be running.
-
-Auth is Django's built-in `django.contrib.auth` for the template UI
-(session cookies), and DRF token authentication for the API
-(`Authorization: Token <key>` header) - session cookies don't play nicely
-across two different origins/ports without extra CORS/CSRF plumbing that
-isn't worth it for a personal project, so the API uses its own token
-instead. Every model that holds user data (`Document`, `CriteriaProfile`,
-`Job`) has an `owner` ForeignKey either way, and both the template views
-and the API views filter to `request.user`.
+Auth is DRF token authentication (`Authorization: Token <key>` header)
+rather than session cookies, since the two deployables live on entirely
+different origins (Vercel vs. Railway) - avoids CORS+CSRF-cookie
+complexity. Every model that holds user data (`Document`,
+`CriteriaProfile`, `Job`) has an `owner` ForeignKey, and every API view
+filters to `request.user`.
 
 ## App layout
 
-Physically split into `backend/` and `frontend/`, sitting side by side:
-
 ```
 pathfinder-job-copilot/
-  backend/                 # Django project - everything below was under the repo root before
+  backend/                 # Django project - API only, deploys to Railway
     manage.py
-    config/                  # project settings, root urls, wsgi/asgi
-    accounts/                # login, signup (Django auth) + serializers.py/api_views.py/api_urls.py
-    portfolio/               # Document model - CV/cert/project library + API equivalents
+    config/                  # project settings, root urls (all /api/... + /admin/), wsgi/asgi
+    accounts/                # User approval workflow: serializers.py/api_views.py/api_urls.py, admin.py
+    portfolio/               # Document model - CV/cert/project library + API
     jobsearch/               # CriteriaProfile, ThresholdRow, Job, SponsorRegisterEntry models
       integrations/
         base.py               # ExternalJob dataclass + JobIntegration protocol
@@ -54,27 +44,27 @@ pathfinder-job-copilot/
         reed.py                 # Reed API client (UK only)
         jsearch.py               # JSearch API client (aggregates Google for Jobs)
       management/commands/
-        sync_sponsor_register.py  # downloads the gov.uk sponsor register CSV
-        check_sponsors.py          # re-checks existing jobs against it
+        sync_sponsor_register.py    # downloads the gov.uk sponsor register CSV
+        check_sponsors.py            # re-checks existing jobs against it
+        purge_bad_jsearch_jobs.py     # one-off cleanup, see "Fixed along the way"
       services.py              # run_search() / save_results() / evaluate_threshold()
       sponsor_register.py      # company-name matching against the register
       serializers.py, api_views.py, api_urls.py   # REST API for this app
     aiassist/                # GeneratedDraft model + Anthropic-backed service.py
       service.py               # tailor_cv() / draft_cover_letter() / answer_question()
       serializers.py, api_views.py, api_urls.py
-    templates/base.html      # shared layout + nav + HTMX script tag (template UI)
-    static/css/style.css
     requirements.txt
     .env.example
     .gitignore
-  frontend/                # separate React app (Vite) - the other UI
+  frontend/                # React app (Vite) - the only UI, deploys to Vercel
     src/
       api.js                # fetch wrapper + all API calls
       AuthContext.jsx        # login/signup/logout + current-user state
       App.jsx                 # routes
       pages/                   # JobsPage, CriteriaListPage, CriteriaDetailPage,
-                                # PortfolioPage, AiAssistPage, LoginPage, SignupPage
-      components/               # NavBar, ProtectedRoute
+                                # PortfolioPage, AiAssistPage, LoginPage, SignupPage,
+                                # ApprovalsPage (staff only - approve pending signups)
+      components/               # NavBar, ProtectedRoute, StaffRoute
 ```
 
 ### Data model summary
@@ -106,7 +96,7 @@ pathfinder-job-copilot/
 
 ## Setup
 
-### Backend (required either way)
+### Backend (Django API)
 
 ```bash
 cd pathfinder-job-copilot/backend
@@ -121,12 +111,13 @@ python manage.py sync_sponsor_register   # loads the UK sponsor register (~a min
 python manage.py runserver
 ```
 
-Visit `http://127.0.0.1:8000/accounts/signup/` to create your account
-through the template UI, or `/admin/` with the superuser to manage data
-directly. Job search needs at least one of Adzuna, Reed, or JSearch
-credentials (all free tier); AI features need `ANTHROPIC_API_KEY`.
+`createsuperuser` gives you an account that's active immediately and can
+log into `/admin/` - use it to approve everyone else's signups (see
+"Admin-approved signups" below). Job search needs at least one of Adzuna,
+Reed, or JSearch credentials (all free tier); AI features need
+`ANTHROPIC_API_KEY`.
 
-### Frontend (optional - the React UI)
+### Frontend (React - the UI)
 
 In a second terminal, with the backend above still running:
 
@@ -137,14 +128,9 @@ cp .env.example .env    # VITE_API_BASE_URL, defaults to http://localhost:8000/a
 npm run dev
 ```
 
-Visit `http://localhost:5173` and sign up there - it creates its own
-account via the API (same `User` table, so it's separate from any account
-you made through the template UI's signup unless you use the same
-username). I couldn't run `npm install` or `npm run dev` myself this
-session (same broken-shell issue as elsewhere), so this hasn't been
-executed - if something doesn't compile, it's most likely a small typo
-rather than a structural problem; the component logic mirrors the
-already-working template views closely.
+Visit `http://localhost:5173` and sign up there. New accounts start
+inactive - see "Admin-approved signups" below for how to approve them
+before they can log in.
 
 **JSearch fixed**: the initial version assumed `search-v2` returned
 `{"data": [...]}` (a list of jobs directly). The real shape, per OpenWeb
@@ -165,19 +151,28 @@ weren't confirmed the first time.
 
 ## Admin-approved signups
 
-New accounts (through either UI) are created with `is_active=False` and
-can't log in until an admin approves them. To approve someone: log into
-`/admin/` as your superuser, open Authentication and Authorization > Users,
-tick the "Active" checkbox on their row, and click Save at the bottom -
-no need to open their individual profile. Newest signups sort to the top.
+New accounts are created with `is_active=False` and can't log in until an
+admin approves them. Two ways to approve someone, same underlying flag:
 
-Both login paths (template and API) tell a pending user that their
-account needs approval, rather than showing a generic "invalid
-credentials" message - this needs `AUTHENTICATION_BACKENDS` set to
-`AllowAllUsersModelBackend` in `settings.py` (already done), since the
-default backend silently treats inactive users the same as a wrong
-password. Your own superuser account (via `createsuperuser`) is active
-immediately and isn't affected by any of this.
+1. **In the app** (recommended) - log in with a staff account, an
+   "Approvals" link appears in the nav (`frontend/src/pages/ApprovalsPage.jsx`,
+   backed by `GET/POST /api/auth/pending-users/...`, both gated by DRF's
+   `IsAdminUser` - i.e. `is_staff`).
+2. **In `/admin/`** - Authentication and Authorization > Users, tick
+   "Active" on their row, click Save. Works even if the React app is down.
+
+The API's login endpoint tells a pending user their account needs
+approval, rather than a generic "invalid credentials" message - this
+needs `AUTHENTICATION_BACKENDS` set to `AllowAllUsersModelBackend` in
+`settings.py` (already done), since the default backend silently treats
+inactive users the same as a wrong password. Your own superuser account
+(via `createsuperuser`) is active and staff immediately, unaffected by
+any of this. To promote an existing regular account to staff/superuser
+instead of creating a new one:
+
+```bash
+python manage.py shell -c "from django.contrib.auth.models import User; u = User.objects.get(username='YOUR_USERNAME'); u.is_superuser = True; u.is_staff = True; u.is_active = True; u.save()"
+```
 
 ## What's genuinely working vs. what's a stub
 
@@ -198,11 +193,12 @@ immediately and isn't affected by any of this.
   legal name - the system only ever asserts sponsorship when it's
   confident, and otherwise leaves it to you.
 - **Not built yet**: LinkedIn/company career-page sources (no public
-  API), auto-apply, password reset email, deployment config.
-- **Frontend**: hand-written, not yet run/compiled (see the Setup note
-  above) - covers the same ground as the template UI (auth, job tracker
-  with filters, criteria + going-rate table CRUD, portfolio CRUD, AI
-  actions), styled plainly, no polish pass done yet.
+  API), auto-apply, password reset email, production deployment (Vercel +
+  Railway config, `CORS_ALLOWED_ORIGINS` still only has localhost).
+- **Frontend**: React is the only UI now, running and tested against the
+  live API - auth (incl. admin approval), job tracker with filters,
+  criteria + going-rate table CRUD, portfolio CRUD, AI actions. Styled
+  plainly, no polish pass done yet.
 
 ### Fixed along the way
 
@@ -232,35 +228,20 @@ already saved from before this fix can be cleaned up with
 
 ## Housekeeping
 
-**After the backend/frontend split**, every backend file now lives under
-`backend/` (copied there, not moved - I can't move or delete files in
-this environment). The old root-level copies are now stale duplicates
-and should be deleted manually via File Explorer once you've confirmed
-`backend/` works:
-
-- `manage.py`, `config/`, `accounts/`, `portfolio/`, `jobsearch/`,
-  `aiassist/`, `templates/`, `static/`, root `requirements.txt`, root
-  `.env.example` - all now duplicated under `backend/`, delete the
-  root-level originals.
-- `.venv/` - **don't delete**; instead recreate it inside `backend/`
-  (`cd backend && python -m venv .venv`) since a venv can't just be
-  copied between locations.
-- `.env` (your real secrets, not `.env.example`) - move it into
-  `backend/.env` yourself; I never touch real secrets.
-- `db.sqlite3`, if it exists at the root - move it into `backend/`
-  (or just re-run migrations there and re-add your data/superuser).
-
-This folder also has a `src/`, `tests/`, `data/`, and old root-level
-`pyproject.toml` left over from an earlier standalone-CLI prototype that
-predates the decision to build this as a Django web app - unrelated to
-the app above, safe to delete alongside the stale root-level Django
-files.
+**Template UI removed** (`backend/{accounts,portfolio,jobsearch,aiassist}/{forms,views,urls}.py`,
+each app's `templates/`, project-level `templates/` and `static/`) once
+the React app reached full feature parity, including admin approvals -
+see the "Stack, and why" section above. `config/urls.py` and
+`config/settings.py` no longer reference any of it (`django_htmx`,
+`STATICFILES_DIRS`, `LOGIN_URL`/etc. all removed). Each app's `models.py`,
+`admin.py`, `migrations/`, and `serializers.py`/`api_views.py`/`api_urls.py`
+are unaffected - that's all shared/API code, not template-only.
 
 ## Roadmap
 
-- v1 (this): manual pipeline end-to-end, single-user-per-login, sqlite by default, sponsor-register cross-check, REST API + React frontend alongside the template UI
-- v1.0.1: run `npm install && npm run dev` for real, fix whatever that surfaces
-- v1.1: password reset email, deploy to Railway/Render with Postgres
-- v1.2: scheduled/automatic re-sync of the sponsor register (currently manual)
-- v1.3: additional job sources as APIs become available
+- v1 (this): manual pipeline end-to-end, single-user-per-login, sqlite by default, sponsor-register cross-check, admin-approved signups, React as the single API-backed UI
+- v1.1: deploy - `frontend/` to Vercel, `backend/` to Railway with Postgres (`DATABASE_URL`), update `CORS_ALLOWED_ORIGINS` to the real Vercel domain
+- v1.2: password reset email
+- v1.3: scheduled/automatic re-sync of the sponsor register (currently manual)
+- v1.4: additional job sources as APIs become available
 - v2: auto-apply on user-approved jobs above a confidence threshold (deliberately out of scope until tailoring quality is proven out)

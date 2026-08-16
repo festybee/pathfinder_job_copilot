@@ -1,12 +1,12 @@
 """
 Django settings for Pathfinder Job Copilot.
 
-Two UIs share this one backend: the original server-rendered templates +
-HTMX (still fully functional, unchanged), and a REST API (django rest
-framework, under /api/) consumed by a separate React app in frontend/.
-The API uses token auth (Authorization: Token <key>) rather than session
-cookies, since the frontend runs on a different origin/port during
-development - avoids CORS+CSRF-cookie complexity for a personal project.
+API-only backend (django rest framework, under /api/) consumed by the
+React app in frontend/, which is the single UI. The API uses token auth
+(Authorization: Token <key>) rather than session cookies, since the
+frontend runs on a different origin/deployment entirely (Vercel vs.
+Railway) - avoids CORS+CSRF-cookie complexity. django.contrib.admin is
+still mounted at /admin/ for superuser/user-approval management.
 """
 from pathlib import Path
 import os
@@ -32,7 +32,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django_htmx",
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
@@ -44,6 +43,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -51,15 +51,16 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "django_htmx.middleware.HtmxMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
+        # No project-level template dir - the only Django-rendered pages
+        # left are django.contrib.admin's own, which come from APP_DIRS.
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -104,19 +105,27 @@ TIME_ZONE = "Europe/London"
 USE_I18N = True
 USE_TZ = True
 
+# STATICFILES_DIRS deliberately not set - no custom static/ dir anymore
+# (that was only for the removed template UI). STATIC_URL/ROOT stay since
+# django.contrib.admin needs them for its own CSS/JS via collectstatic.
+# WhiteNoise (see MIDDLEWARE) serves STATIC_ROOT directly from the Django
+# process in production - no separate static host/CDN needed for /admin/.
 STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# --- Auth / login ---
-LOGIN_URL = "accounts:login"
-LOGIN_REDIRECT_URL = "jobsearch:job_list"
-LOGOUT_REDIRECT_URL = "accounts:login"
+# LOGIN_URL/LOGIN_REDIRECT_URL/LOGOUT_REDIRECT_URL deliberately not set -
+# those pointed at the removed template UI's own login page. The API
+# doesn't redirect on auth failure, it just returns 401/403 JSON.
 
 # New signups are created with is_active=False (see accounts.forms and
 # accounts.serializers) and need an admin to flip them to active in
@@ -145,10 +154,26 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
 }
 
-# Vite's default dev server port. Add your deployed frontend origin here
-# too once you have one.
+# Vite's default dev server port, plus whatever production frontend
+# origin(s) are set via env (e.g. https://job.pathwrightltd.com).
 CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    if o.strip()
+]
+
+# Railway (and most PaaS hosts) terminate TLS at a proxy in front of the
+# app, then forward plain HTTP internally with this header set - without
+# it, Django thinks every request is insecure, which breaks CSRF checks
+# on /admin/ (session/cookie-based, unlike the token-authenticated API).
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Needed for /admin/'s login form (uses session + CSRF cookies) to work
+# once it's served from a real domain rather than localhost. Set this via
+# env in production, e.g. https://api.job.pathwrightltd.com - the token-
+# authenticated API endpoints under /api/ aren't affected either way.
+CSRF_TRUSTED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
     if o.strip()
 ]
