@@ -6,6 +6,8 @@ Free tier requires an app_id + app_key from https://developer.adzuna.com/.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
 from django.conf import settings
 
@@ -39,6 +41,52 @@ class AdzunaIntegration:
         self.app_id = app_id or settings.ADZUNA_APP_ID
         self.app_key = app_key or settings.ADZUNA_APP_KEY
 
+    def _search_one(self, keyword: str, location: str, country_code: str, job_type: str) -> list[ExternalJob]:
+        url = _BASE_URL.format(country=country_code.lower())
+        params = {
+            "app_id": self.app_id,
+            "app_key": self.app_key,
+            "what": keyword,
+            "results_per_page": 50,
+            "content-type": "application/json",
+        }
+        if location and location.lower() != "remote":
+            params["where"] = location
+        if job_type == "fulltime":
+            params["full_time"] = 1
+        elif job_type == "parttime":
+            params["part_time"] = 1
+        elif job_type == "contract":
+            params["contract"] = 1
+
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        payload = response.json()
+
+        results = []
+        for item in payload.get("results", []):
+            salary_min = item.get("salary_min")
+            salary_max = item.get("salary_max")
+            currency = _CURRENCY_BY_COUNTRY.get(country_code.upper(), country_code.upper())
+            compensation = ""
+            if salary_min and salary_max:
+                compensation = f"{currency} {salary_min:.0f} - {salary_max:.0f}"
+            elif salary_min:
+                compensation = f"{currency} {salary_min:.0f}+"
+
+            results.append(
+                ExternalJob(
+                    external_id=str(item.get("id", "")),
+                    title=item.get("title", ""),
+                    company=(item.get("company") or {}).get("display_name", ""),
+                    location=(item.get("location") or {}).get("display_name", ""),
+                    description=item.get("description", ""),
+                    url=item.get("redirect_url", ""),
+                    compensation_raw=compensation,
+                )
+            )
+        return results
+
     def search(
         self, keywords: list[str], location: str, country_code: str, job_type: str = ""
     ) -> list[ExternalJob]:
@@ -53,57 +101,24 @@ class AdzunaIntegration:
         # joining all keywords into a single query - Adzuna's "what" param
         # requires every word in the query to be present, so "risk
         # assessment compliance enforcement" as one string demands all of
-        # those words appear together and matches almost nothing.
-        url = _BASE_URL.format(country=country_code.lower())
+        # those words appear together and matches almost nothing. Run them
+        # concurrently rather than one after another - a profile can have
+        # many keywords, and doing them serially (each up to 15s) was slow
+        # enough to trip Gunicorn's worker timeout on Railway for profiles
+        # with a long keyword list.
+        keyword_list = keywords or [""]
+        with ThreadPoolExecutor(max_workers=min(6, len(keyword_list))) as executor:
+            batches = list(
+                executor.map(lambda kw: self._search_one(kw, location, country_code, job_type), keyword_list)
+            )
+
         jobs: list[ExternalJob] = []
         seen_ids: set[str] = set()
-
-        for keyword in keywords or [""]:
-            params = {
-                "app_id": self.app_id,
-                "app_key": self.app_key,
-                "what": keyword,
-                "results_per_page": 50,
-                "content-type": "application/json",
-            }
-            if location and location.lower() != "remote":
-                params["where"] = location
-            if job_type == "fulltime":
-                params["full_time"] = 1
-            elif job_type == "parttime":
-                params["part_time"] = 1
-            elif job_type == "contract":
-                params["contract"] = 1
-
-            response = requests.get(url, params=params, timeout=15)
-            response.raise_for_status()
-            payload = response.json()
-
-            for item in payload.get("results", []):
-                external_id = str(item.get("id", ""))
-                if external_id in seen_ids:
+        for batch in batches:
+            for job in batch:
+                if job.external_id in seen_ids:
                     continue
-                seen_ids.add(external_id)
-
-                salary_min = item.get("salary_min")
-                salary_max = item.get("salary_max")
-                currency = _CURRENCY_BY_COUNTRY.get(country_code.upper(), country_code.upper())
-                compensation = ""
-                if salary_min and salary_max:
-                    compensation = f"{currency} {salary_min:.0f} - {salary_max:.0f}"
-                elif salary_min:
-                    compensation = f"{currency} {salary_min:.0f}+"
-
-                jobs.append(
-                    ExternalJob(
-                        external_id=external_id,
-                        title=item.get("title", ""),
-                        company=(item.get("company") or {}).get("display_name", ""),
-                        location=(item.get("location") or {}).get("display_name", ""),
-                        description=item.get("description", ""),
-                        url=item.get("redirect_url", ""),
-                        compensation_raw=compensation,
-                    )
-                )
+                seen_ids.add(job.external_id)
+                jobs.append(job)
 
         return jobs
