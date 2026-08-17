@@ -13,6 +13,9 @@ const ACTIONS = {
   qa: { kind: "qa", label: "Application Q&A", needsQuestion: true, call: api.askQuestion },
 };
 
+// Must match GenerateRequestSerializer.document_ids' max_length on the backend.
+const MAX_DOCUMENTS = 10;
+
 export default function AiAssistPage() {
   const { jobId } = useParams();
   const [searchParams] = useSearchParams();
@@ -76,17 +79,25 @@ export default function AiAssistPage() {
 
       <form onSubmit={handleGenerate} className="stacked card">
         {error && <p className="error">{error}</p>}
-        <p>Tick which portfolio documents to ground this draft in:</p>
-        {documents.map((doc) => (
-          <label key={doc.id} style={{ display: "block" }}>
-            <input
-              type="checkbox"
-              checked={selectedIds.includes(doc.id)}
-              onChange={() => toggleDocument(doc.id)}
-            />{" "}
-            {doc.title}
-          </label>
-        ))}
+        <p>
+          Tick which portfolio documents to ground this draft in ({selectedIds.length} / {MAX_DOCUMENTS}
+          ):
+        </p>
+        {documents.map((doc) => {
+          const checked = selectedIds.includes(doc.id);
+          const atLimit = !checked && selectedIds.length >= MAX_DOCUMENTS;
+          return (
+            <label key={doc.id} style={{ display: "block", opacity: atLimit ? 0.5 : 1 }}>
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={atLimit}
+                onChange={() => toggleDocument(doc.id)}
+              />{" "}
+              {doc.title}
+            </label>
+          );
+        })}
         {documents.length === 0 && (
           <p>
             No portfolio documents yet - <Link to="/portfolio">add one first</Link>.
@@ -96,7 +107,13 @@ export default function AiAssistPage() {
         {needsQuestion && (
           <label>
             Application question
-            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} required />
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              required
+            />
           </label>
         )}
 

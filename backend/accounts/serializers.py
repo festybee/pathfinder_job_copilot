@@ -10,7 +10,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class SignupSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, validators=[validate_password])
+    # max_length is defensive, not a real-world constraint - avoids relying
+    # on assumptions about how the password hasher behaves on an extremely
+    # long input. username/email are already bounded by User's own field
+    # definitions (max_length=150 / 254), enforced automatically since this
+    # is a ModelSerializer.
+    password = serializers.CharField(write_only=True, max_length=128, validators=[validate_password])
 
     class Meta:
         model = User

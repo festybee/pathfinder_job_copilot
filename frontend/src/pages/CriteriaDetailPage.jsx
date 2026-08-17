@@ -145,11 +145,16 @@ export default function CriteriaDetailPage() {
       <form onSubmit={handleRowSubmit} className="stacked card">
         <label>
           Keyword match
-          <input value={rowForm.keyword_match} onChange={handleRowChange("keyword_match")} required />
+          <input
+            value={rowForm.keyword_match}
+            onChange={handleRowChange("keyword_match")}
+            maxLength={150}
+            required
+          />
         </label>
         <label>
           Occupation code
-          <input value={rowForm.occupation_code} onChange={handleRowChange("occupation_code")} />
+          <input value={rowForm.occupation_code} onChange={handleRowChange("occupation_code")} maxLength={50} />
         </label>
         <label>
           Threshold amount
@@ -157,6 +162,8 @@ export default function CriteriaDetailPage() {
             type="number"
             value={rowForm.threshold_amount}
             onChange={handleRowChange("threshold_amount")}
+            min={0}
+            max={1000000}
             required
           />
         </label>

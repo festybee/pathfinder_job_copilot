@@ -3,6 +3,8 @@ import * as api from "../api.js";
 import GuidePanel from "../components/GuidePanel.jsx";
 
 const emptyForm = { title: "", doc_type: "other", tags: "", body_text: "" };
+// Must match Document.body_text's MaxLengthValidator on the backend.
+const MAX_BODY_TEXT = 20000;
 const DOC_TYPES = [
   ["cv", "CV / Resume"],
   ["certificate", "Certificate"],
@@ -108,7 +110,7 @@ export default function PortfolioPage() {
       <form onSubmit={handleSubmit} className="stacked card">
         <label>
           Title
-          <input value={form.title} onChange={handleChange("title")} required />
+          <input value={form.title} onChange={handleChange("title")} maxLength={200} required />
         </label>
         <label>
           Type
@@ -122,12 +124,31 @@ export default function PortfolioPage() {
         </label>
         <label>
           Tags (comma-separated)
-          <input value={form.tags} onChange={handleChange("tags")} placeholder="python, sql, agile" />
+          <input
+            value={form.tags}
+            onChange={handleChange("tags")}
+            placeholder="python, sql, agile"
+            maxLength={300}
+          />
         </label>
         <label>
           Body text
-          <textarea value={form.body_text} onChange={handleChange("body_text")} rows={8} />
+          <textarea
+            value={form.body_text}
+            onChange={handleChange("body_text")}
+            rows={8}
+            maxLength={MAX_BODY_TEXT}
+          />
         </label>
+        <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}>
+          <small
+            style={{
+              color: form.body_text.length > MAX_BODY_TEXT * 0.9 ? "#b3261e" : "var(--muted)",
+            }}
+          >
+            {form.body_text.length} / {MAX_BODY_TEXT} characters
+          </small>
+        </p>
         <button className="primary" type="submit" disabled={saving}>
           {saving ? "Adding..." : "Add to portfolio"}
         </button>

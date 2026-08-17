@@ -19,6 +19,9 @@ const emptyForm = {
 // request even goes out.
 const MAX_KEYWORDS = 12;
 
+// Must match _MAX_SALARY on the backend (jobsearch/models.py).
+const MAX_SALARY = 1000000;
+
 function keywordCount(value) {
   return value.split(",").filter((k) => k.trim()).length;
 }
@@ -130,11 +133,11 @@ export default function CriteriaListPage() {
         {error && <p className="error">{error}</p>}
         <label>
           Name
-          <input value={form.name} onChange={handleChange("name")} required />
+          <input value={form.name} onChange={handleChange("name")} maxLength={100} required />
         </label>
         <label>
           Keywords (comma-separated)
-          <input value={form.keywords} onChange={handleChange("keywords")} required />
+          <input value={form.keywords} onChange={handleChange("keywords")} maxLength={300} required />
         </label>
         <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}>
           <small
@@ -147,7 +150,12 @@ export default function CriteriaListPage() {
         </p>
         <label>
           Location
-          <input value={form.location} onChange={handleChange("location")} placeholder="City, or 'remote'" />
+          <input
+            value={form.location}
+            onChange={handleChange("location")}
+            placeholder="City, or 'remote'"
+            maxLength={150}
+          />
         </label>
         <label>
           Country code
@@ -183,6 +191,8 @@ export default function CriteriaListPage() {
               type="number"
               value={form.flat_minimum_salary}
               onChange={handleChange("flat_minimum_salary")}
+              min={0}
+              max={MAX_SALARY}
             />
           </label>
         )}

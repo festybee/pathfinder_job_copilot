@@ -1,5 +1,12 @@
 from django.conf import settings
+from django.core.validators import MaxValueValidator
 from django.db import models
+
+# Sanity bound, not a real-world limit - guards against a fat-fingered extra
+# zero (e.g. 4,170,000 instead of 41,700) silently producing a threshold no
+# job could ever clear, rather than an obviously-wrong value the user would
+# notice and fix. PositiveIntegerField already rejects negative numbers.
+_MAX_SALARY = 1_000_000
 
 
 class CriteriaProfile(models.Model):
@@ -31,7 +38,10 @@ class CriteriaProfile(models.Model):
         max_length=20, choices=SalaryMode.choices, default=SalaryMode.GOING_RATE
     )
     flat_minimum_salary = models.PositiveIntegerField(
-        null=True, blank=True, help_text="Only used when salary_mode = flat_minimum"
+        null=True,
+        blank=True,
+        validators=[MaxValueValidator(_MAX_SALARY)],
+        help_text="Only used when salary_mode = flat_minimum",
     )
     include_sponsorship_keyword = models.BooleanField(
         default=False,
@@ -70,7 +80,7 @@ class ThresholdRow(models.Model):
         max_length=150, help_text="Job title/keyword this row applies to, e.g. 'data analyst'"
     )
     occupation_code = models.CharField(max_length=50, blank=True, help_text="e.g. SOC 3544")
-    threshold_amount = models.PositiveIntegerField()
+    threshold_amount = models.PositiveIntegerField(validators=[MaxValueValidator(_MAX_SALARY)])
     currency = models.CharField(max_length=3, default="GBP")
     verified = models.BooleanField(
         default=False, help_text="Whether this figure has been checked against an official source"

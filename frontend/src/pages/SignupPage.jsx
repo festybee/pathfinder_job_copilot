@@ -51,7 +51,7 @@ export default function SignupPage() {
         {error && <p className="error">{error}</p>}
         <label>
           Username
-          <input value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <input value={username} onChange={(e) => setUsername(e.target.value)} maxLength={150} required />
         </label>
         <label>
           Email
@@ -59,6 +59,7 @@ export default function SignupPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            maxLength={254}
             required
           />
         </label>
@@ -68,6 +69,7 @@ export default function SignupPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            maxLength={128}
             required
           />
         </label>

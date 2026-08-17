@@ -1,5 +1,13 @@
 from django.conf import settings
+from django.core.validators import MaxLengthValidator
 from django.db import models
+
+# body_text goes straight into an Anthropic API call (see
+# aiassist/service.py) alongside every other selected document - an
+# unbounded paste here isn't just a UI nuisance, it's real API cost and can
+# push a prompt past the model's context window. 20,000 chars is roomy for
+# any genuine CV/cert/write-up (several pages of dense text).
+_MAX_BODY_TEXT = 20_000
 
 
 class Document(models.Model):
@@ -24,7 +32,9 @@ class Document(models.Model):
         max_length=300, blank=True, help_text="Comma-separated, e.g. 'python, sql, agile'"
     )
     body_text = models.TextField(
-        blank=True, help_text="Pasted text content - what the AI layer actually reads."
+        blank=True,
+        validators=[MaxLengthValidator(_MAX_BODY_TEXT)],
+        help_text="Pasted text content - what the AI layer actually reads.",
     )
     file = models.FileField(upload_to="portfolio/%Y/%m/", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
