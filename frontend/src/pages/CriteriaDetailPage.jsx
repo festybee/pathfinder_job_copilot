@@ -40,11 +40,11 @@ export default function CriteriaDetailPage() {
       if (duplicate) extras.push(`${duplicate} skipped as duplicates of jobs already in your tracker`);
       setMessage(
         `Search complete: ${result.new_jobs} new job(s) added to your tracker` +
-          (extras.length ? `, ${extras.join(", ")}.` : ".")
+          (extras.length ? `, ${extras.join(", ")}.` : ".") +
+          (result.had_source_issues
+            ? " Some results may be missing this time - worth trying the search again shortly."
+            : "")
       );
-      if (result.warnings.length) {
-        setError(`Some sources had trouble and were skipped this time: ${result.warnings.join(" · ")}`);
-      }
     } catch (err) {
       setError(err.message);
     } finally {

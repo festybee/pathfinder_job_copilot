@@ -154,6 +154,43 @@ class Job(models.Model):
         return f"{self.title} @ {self.company}"
 
 
+class SearchRun(models.Model):
+    """A record of one 'Run search now' click - admin-only visibility into
+    which sources are flaky/slow/rate-limited over time. The end user never
+    sees this: they don't need to know Adzuna/Reed/JSearch exist as
+    distinct systems, only that their tracker did or didn't get new jobs.
+
+    profile is nullable + profile_name is a snapshot, so this stays
+    readable in /admin/ even if the profile is later renamed or deleted
+    (Job does the same thing via JobSerializer.profile_name).
+    """
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="search_runs"
+    )
+    profile = models.ForeignKey(
+        CriteriaProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name="search_runs"
+    )
+    profile_name = models.CharField(max_length=100)
+    new_jobs = models.PositiveIntegerField(default=0)
+    skipped_below_threshold = models.PositiveIntegerField(default=0)
+    skipped_duplicate = models.PositiveIntegerField(default=0)
+    warnings = models.TextField(
+        blank=True, help_text="One per line - which source(s) had trouble and why, if any."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.profile_name} search by {self.owner} at {self.created_at:%Y-%m-%d %H:%M}"
+
+    @property
+    def had_warnings(self) -> bool:
+        return bool(self.warnings.strip())
+
+
 class SponsorRegisterEntry(models.Model):
     """One row of the UK government's register of licensed Worker/Temporary
     Worker sponsors. Shared reference data, not scoped to a user - populated

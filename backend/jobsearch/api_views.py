@@ -2,7 +2,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from .models import CriteriaProfile, Job, ThresholdRow
+from .models import CriteriaProfile, Job, SearchRun, ThresholdRow
 from .serializers import CriteriaProfileSerializer, JobSerializer, ThresholdRowSerializer
 from .services import existing_fingerprints_for, run_search, save_results
 
@@ -50,12 +50,25 @@ class CriteriaProfileViewSet(viewsets.ModelViewSet):
             total_skipped += skipped
             total_duplicate += duplicate
 
+        # Full detail (which source, why) goes to /admin/ only - end users
+        # don't need to know Adzuna/Reed/JSearch exist as distinct systems,
+        # just whether their tracker got new jobs. See SearchRun/SearchRunAdmin.
+        SearchRun.objects.create(
+            owner=profile.owner,
+            profile=profile,
+            profile_name=profile.name,
+            new_jobs=total_new,
+            skipped_below_threshold=total_skipped,
+            skipped_duplicate=total_duplicate,
+            warnings="\n".join(warnings),
+        )
+
         return Response(
             {
                 "new_jobs": total_new,
                 "skipped_below_threshold": total_skipped,
                 "skipped_duplicate": total_duplicate,
-                "warnings": warnings,
+                "had_source_issues": bool(warnings),
             }
         )
 
