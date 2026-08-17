@@ -33,7 +33,11 @@ export default function CriteriaDetailPage() {
     setError("");
     try {
       const result = await api.runSearch(id);
-      setMessage(`Search complete: ${result.new_jobs} new job(s) added to your tracker.`);
+      const skipped = result.skipped_below_threshold || 0;
+      setMessage(
+        `Search complete: ${result.new_jobs} new job(s) added to your tracker` +
+          (skipped ? `, ${skipped} skipped for not meeting the salary threshold.` : ".")
+      );
       if (result.warnings.length) {
         setError(result.warnings.join(" | "));
       }
@@ -80,12 +84,16 @@ export default function CriteriaDetailPage() {
           The <strong>going-rate table</strong> below only matters if this profile's salary mode is
           "going-rate table". Add one row per role type, e.g. keyword <code>data analyst</code> matched to
           the official minimum salary for that occupation (such as a UK Skilled Worker visa going rate).
-          Jobs matching that keyword get checked against the figure you enter, and marked as clearing or
-          missing the threshold.
         </p>
         <p>
           If this profile's salary mode is "flat minimum" instead, you can ignore the table entirely - just
           click Run search.
+        </p>
+        <p>
+          Once a row (or the flat minimum) applies to a job, the threshold is <strong>mandatory</strong>:
+          jobs that don't clear it are skipped and never added to your tracker at all - a posting with no
+          listed salary counts as £0, so it won't sneak through. Roles you haven't added a row for yet are
+          still shown (unevaluated), so you can spot new keyword patterns and add a row for them.
         </p>
       </GuidePanel>
 

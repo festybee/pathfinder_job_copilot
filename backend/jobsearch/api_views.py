@@ -39,10 +39,15 @@ class CriteriaProfileViewSet(viewsets.ModelViewSet):
 
         results_by_source, warnings = run_search(profile)
         total_new = 0
+        total_skipped = 0
         for source_key, external_jobs in results_by_source.items():
-            total_new += save_results(profile, source_key, external_jobs)
+            created, skipped = save_results(profile, source_key, external_jobs)
+            total_new += created
+            total_skipped += skipped
 
-        return Response({"new_jobs": total_new, "warnings": warnings})
+        return Response(
+            {"new_jobs": total_new, "skipped_below_threshold": total_skipped, "warnings": warnings}
+        )
 
 
 class ThresholdRowViewSet(viewsets.ModelViewSet):

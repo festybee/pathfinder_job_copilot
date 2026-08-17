@@ -72,7 +72,15 @@ def run_search(profile: CriteriaProfile) -> tuple[dict[str, list[ExternalJob]], 
 
 def _extract_low_salary(compensation_raw: str) -> int | None:
     numbers = [int(n.replace(",", "")) for n in _SALARY_NUM_RE.findall(compensation_raw)]
-    return min(numbers) if numbers else None
+    low = min(numbers) if numbers else None
+    # Below this, a figure is almost certainly not a real UK annual salary
+    # (hourly/daily/weekly rate misread as one) - treat as unparseable
+    # rather than comparing it against a thousands-scale threshold, which
+    # would silently produce a nonsense pass/fail. See the comment in
+    # ReedIntegration.search() - this guards against exactly that source.
+    if low is not None and low < 1000:
+        return None
+    return low
 
 
 def _matching_threshold_row(job_title: str, rows: list[ThresholdRow]) -> ThresholdRow | None:
@@ -83,37 +91,66 @@ def _matching_threshold_row(job_title: str, rows: list[ThresholdRow]) -> Thresho
     return None
 
 
-def evaluate_threshold(job: Job) -> None:
-    """Set job.threshold_pass based on the profile's salary_mode. Saves the job."""
-    profile = job.profile
-    if profile is None:
-        return
+def compute_threshold(profile: CriteriaProfile, title: str, compensation_raw: str) -> bool | None:
+    """Whether a job clears its profile's salary rule.
 
-    low_salary = _extract_low_salary(job.compensation_raw)
-    # Below this, a figure is almost certainly not a real UK annual salary
-    # (hourly/daily/weekly rate misread as one) - treat as unparseable
-    # rather than comparing it against a thousands-scale threshold, which
-    # would silently produce a nonsense pass/fail. See the comment in
-    # ReedIntegration.search() - this guards against exactly that source.
-    if low_salary is None or low_salary < 1000:
-        job.threshold_pass = None
-        job.save(update_fields=["threshold_pass"])
-        return
+    Returns None when there's no rule to judge this job by yet (going-rate
+    mode with no matching keyword row, or flat-minimum mode with no amount
+    set) - such jobs are still kept, unevaluated, so new role types remain
+    visible and you can add a going-rate row for them.
 
+    Once a rule *does* apply, missing/unparseable salary counts as 0 rather
+    than being treated as unevaluated - a job with no stated salary doesn't
+    get a free pass on a mandatory threshold.
+    """
     if profile.salary_mode == CriteriaProfile.SalaryMode.FLAT_MINIMUM:
         threshold = profile.flat_minimum_salary
     else:
-        row = _matching_threshold_row(job.title, list(profile.threshold_rows.all()))
+        row = _matching_threshold_row(title, list(profile.threshold_rows.all()))
         threshold = row.threshold_amount if row else None
 
-    job.threshold_pass = (low_salary >= threshold) if threshold is not None else None
+    if threshold is None:
+        return None
+
+    low_salary = _extract_low_salary(compensation_raw)
+    effective_salary = low_salary if low_salary is not None else 0
+    return effective_salary >= threshold
+
+
+def evaluate_threshold(job: Job) -> None:
+    """Recompute + save job.threshold_pass for an already-saved job. Used by
+    the purge_below_threshold_jobs management command; new jobs from a
+    search are evaluated before they're ever saved (see save_results)."""
+    profile = job.profile
+    if profile is None:
+        job.threshold_pass = None
+        job.save(update_fields=["threshold_pass"])
+        return
+    job.threshold_pass = compute_threshold(profile, job.title, job.compensation_raw)
     job.save(update_fields=["threshold_pass"])
 
 
-def save_results(profile: CriteriaProfile, source_name: str, external_jobs: list[ExternalJob]) -> int:
-    """Upsert ExternalJob results as Job rows. Returns count of newly created jobs."""
+def save_results(
+    profile: CriteriaProfile, source_name: str, external_jobs: list[ExternalJob]
+) -> tuple[int, int]:
+    """Upsert ExternalJob results as Job rows.
+
+    A job is skipped entirely - never written to the database - when a
+    salary rule applies to it (a matching going-rate row, or a flat
+    minimum) and it doesn't clear it; missing/unparseable salary counts as
+    0 for that check. Jobs with no applicable rule yet are still saved
+    (threshold_pass=None) so new role types stay visible.
+
+    Returns (created, skipped_below_threshold).
+    """
     created = 0
+    skipped = 0
     for ext in external_jobs:
+        threshold_pass = compute_threshold(profile, ext.title, ext.compensation_raw)
+        if threshold_pass is False:
+            skipped += 1
+            continue
+
         job, was_created = Job.objects.get_or_create(
             owner=profile.owner,
             source=source_name,
@@ -126,11 +163,11 @@ def save_results(profile: CriteriaProfile, source_name: str, external_jobs: list
                 "description": ext.description,
                 "url": ext.url,
                 "compensation_raw": ext.compensation_raw,
+                "threshold_pass": threshold_pass,
             },
         )
         if was_created:
             created += 1
-            evaluate_threshold(job)
             apply_sponsor_check(job)  # no-op if the register hasn't been synced yet
 
-    return created
+    return created, skipped
