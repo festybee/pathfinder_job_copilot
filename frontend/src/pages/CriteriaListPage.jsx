@@ -14,6 +14,15 @@ const emptyForm = {
   include_sponsorship_keyword: false,
 };
 
+// Must match CriteriaProfileSerializer.MAX_KEYWORDS on the backend - that's
+// the enforced limit, this is just a faster, friendlier check before the
+// request even goes out.
+const MAX_KEYWORDS = 12;
+
+function keywordCount(value) {
+  return value.split(",").filter((k) => k.trim()).length;
+}
+
 export default function CriteriaListPage() {
   const [profiles, setProfiles] = useState([]);
   const [choices, setChoices] = useState({ job_type: {}, salary_mode: {} });
@@ -42,6 +51,16 @@ export default function CriteriaListPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    const count = keywordCount(form.keywords);
+    if (count > MAX_KEYWORDS) {
+      setError(
+        `Too many keywords (${count}) - max ${MAX_KEYWORDS} per profile. Split extra role variants into ` +
+          "a separate criteria profile instead."
+      );
+      return;
+    }
+
     try {
       const payload = { ...form, flat_minimum_salary: form.flat_minimum_salary || null };
       await api.createCriteriaProfile(payload);
@@ -62,7 +81,9 @@ export default function CriteriaListPage() {
         <ul>
           <li>
             <strong>Keywords</strong>: comma-separated terms to search for, e.g.{" "}
-            <code>data analyst, business analyst</code>
+            <code>data analyst, business analyst</code>. Capped at{" "}
+            <strong>{MAX_KEYWORDS} per profile</strong>. Got more role variants than that? Split them
+            across <strong>several criteria profiles</strong> instead of piling them all into one.
           </li>
           <li>
             <strong>Location</strong>: a city, or <code>remote</code> - leave blank to search anywhere
@@ -115,6 +136,15 @@ export default function CriteriaListPage() {
           Keywords (comma-separated)
           <input value={form.keywords} onChange={handleChange("keywords")} required />
         </label>
+        <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}>
+          <small
+            style={{
+              color: keywordCount(form.keywords) > MAX_KEYWORDS ? "#b3261e" : "var(--muted)",
+            }}
+          >
+            {keywordCount(form.keywords)} / {MAX_KEYWORDS} keywords
+          </small>
+        </p>
         <label>
           Location
           <input value={form.location} onChange={handleChange("location")} placeholder="City, or 'remote'" />

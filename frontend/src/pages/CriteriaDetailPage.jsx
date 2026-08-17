@@ -43,7 +43,7 @@ export default function CriteriaDetailPage() {
           (extras.length ? `, ${extras.join(", ")}.` : ".")
       );
       if (result.warnings.length) {
-        setError(result.warnings.join(" | "));
+        setError(`Some sources had trouble and were skipped this time: ${result.warnings.join(" · ")}`);
       }
     } catch (err) {
       setError(err.message);

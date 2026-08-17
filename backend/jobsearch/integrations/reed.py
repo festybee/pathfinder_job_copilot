@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 from django.conf import settings
 
-from .base import ExternalJob
+from .base import ExternalJob, raise_clean_request_error
 
 _SEARCH_URL = "https://www.reed.co.uk/api/1.0/search"
 
@@ -40,8 +40,11 @@ class ReedIntegration:
         if param_name:
             params[param_name] = "true"
 
-        response = requests.get(_SEARCH_URL, params=params, auth=(self.api_key, ""), timeout=15)
-        response.raise_for_status()
+        try:
+            response = requests.get(_SEARCH_URL, params=params, auth=(self.api_key, ""), timeout=15)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            raise_clean_request_error(exc)
         payload = response.json()
 
         results = []

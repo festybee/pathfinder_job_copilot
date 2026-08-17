@@ -6,9 +6,16 @@ import GuidePanel from "../components/GuidePanel.jsx";
 const PAGE_SIZE = 20;
 
 function JobCard({ job, statusChoices, sponsorChoices, onUpdate }) {
+  const [updateError, setUpdateError] = useState("");
+
   const handleChange = async (field, value) => {
-    const updated = await api.updateJob(job.id, { [field]: value });
-    onUpdate(updated);
+    setUpdateError("");
+    try {
+      const updated = await api.updateJob(job.id, { [field]: value });
+      onUpdate(updated);
+    } catch (err) {
+      setUpdateError(err.message);
+    }
   };
 
   return (
@@ -57,6 +64,7 @@ function JobCard({ job, statusChoices, sponsorChoices, onUpdate }) {
           </select>
         </label>
       </div>
+      {updateError && <p className="error">{updateError}</p>}
       <p>
         <Link to={`/jobs/${job.id}/ai?action=tailor-cv`}>Tailor CV</Link> &middot;{" "}
         <Link to={`/jobs/${job.id}/ai?action=cover-letter`}>Cover letter</Link> &middot;{" "}

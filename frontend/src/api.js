@@ -26,6 +26,37 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Turn whatever the API sent back on an error response into a short,
+ * readable sentence - never raw JSON or a stack-trace-y string.
+ * Handles: {"detail": "..."} (our hand-written views), DRF validation
+ * errors like {"email": ["already exists"], "password": ["too short"]},
+ * and plain-text/empty bodies (e.g. a 500 with no JSON body at all).
+ */
+function friendlyErrorMessage(data, status) {
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    if (typeof data.detail === "string") return data.detail;
+
+    const parts = [];
+    for (const [field, value] of Object.entries(data)) {
+      const messages = Array.isArray(value) ? value : [value];
+      for (const msg of messages) {
+        if (typeof msg !== "string") continue;
+        parts.push(field === "non_field_errors" ? msg : `${field}: ${msg}`);
+      }
+    }
+    if (parts.length) return parts.join(" ");
+  }
+
+  if (typeof data === "string" && data.trim() && !data.trim().startsWith("<")) {
+    // Plain-text body, but not an HTML error page (Django's DEBUG=False
+    // 500 pages aren't something a user should ever see rendered as text).
+    return data.trim();
+  }
+
+  return `Something went wrong (error ${status}). Please try again.`;
+}
+
 export async function apiFetch(path, { method = "GET", body, isFormData = false } = {}) {
   const headers = {};
   const token = getToken();
@@ -57,9 +88,7 @@ export async function apiFetch(path, { method = "GET", body, isFormData = false 
   }
 
   if (!response.ok) {
-    const message =
-      (data && (data.detail || JSON.stringify(data))) || `Request failed (${response.status})`;
-    throw new ApiError(message, response.status, data);
+    throw new ApiError(friendlyErrorMessage(data, response.status), response.status, data);
   }
 
   return data;

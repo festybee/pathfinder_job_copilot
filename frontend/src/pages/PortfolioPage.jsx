@@ -14,12 +14,15 @@ export default function PortfolioPage() {
   const [documents, setDocuments] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = () => {
     setLoading(true);
     api
       .fetchDocuments()
       .then((data) => setDocuments(data.results ?? data))
+      .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   };
 
@@ -29,14 +32,27 @@ export default function PortfolioPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await api.createDocument(form);
-    setForm(emptyForm);
-    load();
+    setError("");
+    setSaving(true);
+    try {
+      await api.createDocument(form);
+      setForm(emptyForm);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id) => {
-    await api.deleteDocument(id);
-    load();
+    setError("");
+    try {
+      await api.deleteDocument(id);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
@@ -69,6 +85,7 @@ export default function PortfolioPage() {
         cover letter - nothing is used without being selected.
       </p>
 
+      {error && <p className="error">{error}</p>}
       {loading && <p>Loading...</p>}
       {documents.map((doc) => (
         <div className="card" key={doc.id}>
@@ -111,8 +128,8 @@ export default function PortfolioPage() {
           Body text
           <textarea value={form.body_text} onChange={handleChange("body_text")} rows={8} />
         </label>
-        <button className="primary" type="submit">
-          Add to portfolio
+        <button className="primary" type="submit" disabled={saving}>
+          {saving ? "Adding..." : "Add to portfolio"}
         </button>
       </form>
     </div>
