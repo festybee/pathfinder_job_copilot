@@ -37,7 +37,15 @@ def run_search(profile: CriteriaProfile) -> tuple[dict[str, list[ExternalJob]], 
                 country_code=profile.country_code,
                 job_type=profile.job_type,
             )
-            combined = list(role_results)
+            # Some sources (Reed in particular) do loose/fuzzy matching
+            # server-side and can hand back jobs whose titles don't contain
+            # any of the searched keywords at all (e.g. an "IT Support
+            # Assistant" posting showing up for a "data analyst" search).
+            # Require the title to actually contain one of the keywords -
+            # same check already used below for the sponsorship-only pass.
+            combined = [
+                job for job in role_results if any(kw.lower() in job.title.lower() for kw in keywords)
+            ]
 
             if profile.include_sponsorship_keyword:
                 # Separate pass, not merged into the keyword list - "visa
@@ -117,6 +125,21 @@ def compute_threshold(profile: CriteriaProfile, title: str, compensation_raw: st
     return effective_salary >= threshold
 
 
+def _job_fingerprint(title: str, company: str, location: str) -> tuple[str, str, str]:
+    return (title.strip().lower(), company.strip().lower(), location.strip().lower())
+
+
+def existing_fingerprints_for(owner) -> set[tuple[str, str, str]]:
+    """(title, company, location) of every job already saved for this
+    owner, across all profiles/sources - used to catch recruiter reposts
+    (same job, new external_id each time) that the source-level dedup in
+    save_results() wouldn't otherwise catch."""
+    return {
+        _job_fingerprint(j.title, j.company, j.location)
+        for j in Job.objects.filter(owner=owner).only("title", "company", "location")
+    }
+
+
 def evaluate_threshold(job: Job) -> None:
     """Recompute + save job.threshold_pass for an already-saved job. Used by
     the purge_below_threshold_jobs management command; new jobs from a
@@ -131,24 +154,45 @@ def evaluate_threshold(job: Job) -> None:
 
 
 def save_results(
-    profile: CriteriaProfile, source_name: str, external_jobs: list[ExternalJob]
-) -> tuple[int, int]:
+    profile: CriteriaProfile,
+    source_name: str,
+    external_jobs: list[ExternalJob],
+    seen_fingerprints: set[tuple[str, str, str]] | None = None,
+) -> tuple[int, int, int]:
     """Upsert ExternalJob results as Job rows.
 
-    A job is skipped entirely - never written to the database - when a
-    salary rule applies to it (a matching going-rate row, or a flat
-    minimum) and it doesn't clear it; missing/unparseable salary counts as
-    0 for that check. Jobs with no applicable rule yet are still saved
-    (threshold_pass=None) so new role types stay visible.
+    A job is skipped entirely - never written to the database - in two
+    cases: (1) a salary rule applies to it (a matching going-rate row, or a
+    flat minimum) and it doesn't clear it, with missing/unparseable salary
+    counting as 0; or (2) it's the same job (by title/company/location) as
+    one already saved, which catches recruiter reposts under a new
+    external_id that the source+external_id uniqueness wouldn't. Jobs with
+    no applicable threshold rule yet are still saved (threshold_pass=None)
+    so new role types stay visible.
 
-    Returns (created, skipped_below_threshold).
+    `seen_fingerprints` lets a caller share one set across multiple sources
+    in the same search, so a duplicate is caught even if two different
+    sources return it. Pass None to have this function build it fresh from
+    the DB (checked only against jobs already saved before this call).
+
+    Returns (created, skipped_below_threshold, skipped_duplicate).
     """
+    if seen_fingerprints is None:
+        seen_fingerprints = existing_fingerprints_for(profile.owner)
+
     created = 0
     skipped = 0
+    skipped_duplicate = 0
     for ext in external_jobs:
+        fingerprint = _job_fingerprint(ext.title, ext.company, ext.location)
+        if fingerprint in seen_fingerprints:
+            skipped_duplicate += 1
+            continue
+
         threshold_pass = compute_threshold(profile, ext.title, ext.compensation_raw)
         if threshold_pass is False:
             skipped += 1
+            seen_fingerprints.add(fingerprint)
             continue
 
         job, was_created = Job.objects.get_or_create(
@@ -166,8 +210,9 @@ def save_results(
                 "threshold_pass": threshold_pass,
             },
         )
+        seen_fingerprints.add(fingerprint)
         if was_created:
             created += 1
             apply_sponsor_check(job)  # no-op if the register hasn't been synced yet
 
-    return created, skipped
+    return created, skipped, skipped_duplicate

@@ -34,9 +34,13 @@ export default function CriteriaDetailPage() {
     try {
       const result = await api.runSearch(id);
       const skipped = result.skipped_below_threshold || 0;
+      const duplicate = result.skipped_duplicate || 0;
+      const extras = [];
+      if (skipped) extras.push(`${skipped} skipped for not meeting the salary threshold`);
+      if (duplicate) extras.push(`${duplicate} skipped as duplicates of jobs already in your tracker`);
       setMessage(
         `Search complete: ${result.new_jobs} new job(s) added to your tracker` +
-          (skipped ? `, ${skipped} skipped for not meeting the salary threshold.` : ".")
+          (extras.length ? `, ${extras.join(", ")}.` : ".")
       );
       if (result.warnings.length) {
         setError(result.warnings.join(" | "));

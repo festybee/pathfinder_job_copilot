@@ -4,7 +4,7 @@ from rest_framework.response import Response
 
 from .models import CriteriaProfile, Job, ThresholdRow
 from .serializers import CriteriaProfileSerializer, JobSerializer, ThresholdRowSerializer
-from .services import run_search, save_results
+from .services import existing_fingerprints_for, run_search, save_results
 
 
 @api_view(["GET"])
@@ -40,13 +40,23 @@ class CriteriaProfileViewSet(viewsets.ModelViewSet):
         results_by_source, warnings = run_search(profile)
         total_new = 0
         total_skipped = 0
+        total_duplicate = 0
+        # Shared across sources so a job returned by both Adzuna and Reed
+        # (or a repost caught mid-batch) is only ever saved once.
+        seen_fingerprints = existing_fingerprints_for(profile.owner)
         for source_key, external_jobs in results_by_source.items():
-            created, skipped = save_results(profile, source_key, external_jobs)
+            created, skipped, duplicate = save_results(profile, source_key, external_jobs, seen_fingerprints)
             total_new += created
             total_skipped += skipped
+            total_duplicate += duplicate
 
         return Response(
-            {"new_jobs": total_new, "skipped_below_threshold": total_skipped, "warnings": warnings}
+            {
+                "new_jobs": total_new,
+                "skipped_below_threshold": total_skipped,
+                "skipped_duplicate": total_duplicate,
+                "warnings": warnings,
+            }
         )
 
 
