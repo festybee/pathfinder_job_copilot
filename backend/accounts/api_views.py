@@ -77,3 +77,45 @@ def approve_user(request, pk):
     target.is_active = True
     target.save(update_fields=["is_active"])
     return Response(UserSerializer(target).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def approved_users(request):
+    """Active accounts, i.e. everyone with current access - shown below
+    pending approvals so an admin can track/suspend/delete from one page."""
+    users = User.objects.filter(is_active=True).order_by("-date_joined")
+    return Response(UserSerializer(users, many=True).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def suspend_user(request, pk):
+    """Revoke access without deleting the account - flips is_active back to
+    False, so the user reappears in pending_users and can be re-approved
+    later. Also deletes their token so an existing session dies immediately
+    rather than only on next login (TokenAuthentication would reject it
+    anyway once is_active is False, this just makes it instant)."""
+    if request.user.pk == pk:
+        return Response(
+            {"detail": "You can't suspend your own account."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    target = get_object_or_404(User, pk=pk, is_active=True)
+    target.is_active = False
+    target.save(update_fields=["is_active"])
+    Token.objects.filter(user=target).delete()
+    return Response(UserSerializer(target).data)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAdminUser])
+def delete_user(request, pk):
+    if request.user.pk == pk:
+        return Response(
+            {"detail": "You can't delete your own account."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    target = get_object_or_404(User, pk=pk)
+    target.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)

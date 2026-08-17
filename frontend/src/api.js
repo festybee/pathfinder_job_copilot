@@ -79,6 +79,9 @@ export const fetchMe = () => apiFetch("/auth/me/");
 // --- Admin approval (staff only - server enforces this via IsAdminUser) ---
 export const fetchPendingUsers = () => apiFetch("/auth/pending-users/");
 export const approveUser = (id) => apiFetch(`/auth/pending-users/${id}/approve/`, { method: "POST" });
+export const fetchApprovedUsers = () => apiFetch("/auth/approved-users/");
+export const suspendUser = (id) => apiFetch(`/auth/approved-users/${id}/suspend/`, { method: "POST" });
+export const deleteUser = (id) => apiFetch(`/auth/approved-users/${id}/`, { method: "DELETE" });
 
 // --- Reference data ---
 export const fetchChoices = () => apiFetch("/jobsearch/choices/");
