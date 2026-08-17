@@ -82,9 +82,10 @@ def approve_user(request, pk):
 @api_view(["GET"])
 @permission_classes([IsAdminUser])
 def approved_users(request):
-    """Active accounts, i.e. everyone with current access - shown below
-    pending approvals so an admin can track/suspend/delete from one page."""
-    users = User.objects.filter(is_active=True).order_by("-date_joined")
+    """Active, non-staff accounts - shown below pending approvals so an
+    admin can track/suspend/delete from one page. Staff/admin accounts are
+    deliberately excluded - they're managed in /admin/, not here."""
+    users = User.objects.filter(is_active=True, is_staff=False).order_by("-date_joined")
     return Response(UserSerializer(users, many=True).data)
 
 
@@ -102,6 +103,11 @@ def suspend_user(request, pk):
             status=status.HTTP_400_BAD_REQUEST,
         )
     target = get_object_or_404(User, pk=pk, is_active=True)
+    if target.is_staff:
+        return Response(
+            {"detail": "Admin accounts can't be suspended here - use /admin/ instead."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     target.is_active = False
     target.save(update_fields=["is_active"])
     Token.objects.filter(user=target).delete()
@@ -117,5 +123,10 @@ def delete_user(request, pk):
             status=status.HTTP_400_BAD_REQUEST,
         )
     target = get_object_or_404(User, pk=pk)
+    if target.is_staff:
+        return Response(
+            {"detail": "Admin accounts can't be deleted here - use /admin/ instead."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     target.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
